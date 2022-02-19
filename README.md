@@ -6,18 +6,16 @@ https://blackcoinmore.org
 What is Blackcoin?
 ----------------
 
-Blackcoin is a decentralised digital currency with near-instant transaction speeds and negligible transaction fees built upon Proof of Stake 3.0 (PoSV3, BPoS) as
-introduced by the Blackcoin development team.
-
-For more information about Blackcoin itself, see https://blackcoin.org.
+Blackcoin is a decentralised digital currency with near-instant transaction speeds and negligible transaction fees built upon Proof of Stake 3.0 (PoSV3, BPoS) as introduced by the Blackcoin development team.
 
 What is Blackcoin More?
 ----------------
 
-Blackcoin More is the name of open source software which enables the use of this currency. It takes Blackcoin to the next level by building upon
-Bitcoin Core 0.13.2 with some patches from newer Bitcoin Core versions to offer performance enhancements, wider compatibility with third party services and a more advanced base.
+Blackcoin More is the name of open source software which enables use of the Blackcoin protocol. 
+By building upon Bitcoin Core 0.20.2, Blackcoin More is an alternate approach to the original client that provides wider compatibility with third party services and a more advanced base.
 
-For more information, as well as an immediately useable, binary version of the Blackcoin More software, see https://blackcoinmore.org.
+For more information, as well as an immediately useable, binary version of
+the Blackcoin More software, see https://blackcoinmore.org.
 
 License
 -------
@@ -34,9 +32,8 @@ regularly to indicate new official, stable release versions of Blackcoin More.
 
 Change log can be found in [CHANGELOG.md](CHANGELOG.md).
 
-The contribution workflow is described in [CONTRIBUTING.md](CONTRIBUTING.md).
-
-The best place to get started is to join the Development channel on Gitter: https://gitter.im/Blackcoin_Hub/Development
+The contribution workflow is described in [CONTRIBUTING.md](CONTRIBUTING.md)
+and useful hints for developers can be found in [doc/developer-notes.md](doc/developer-notes.md).
 
 Testing
 -------
@@ -48,15 +45,16 @@ lots of money.
 
 ### Automated Testing
 
-Developers are strongly encouraged to write [unit tests](/doc/unit-tests.md) for new code, and to
+Developers are strongly encouraged to write [unit tests](src/test/README.md) for new code, and to
 submit new unit tests for old code. Unit tests can be compiled and run
-(assuming they weren't disabled in configure) with: `make check`
+(assuming they weren't disabled in configure) with: `make check`. Further details on running
+and extending unit tests can be found in [/src/test/README.md](/src/test/README.md).
 
-There are also [regression and integration tests](/qa) of the RPC interface, written
+There are also [regression and integration tests](/test), written
 in Python, that are run automatically on the build server.
-These tests can be run (if the [test dependencies](/qa) are installed) with: `qa/pull-tester/rpc-tests.py`
+These tests can be run (if the [test dependencies](/test) are installed) with: `test/functional/test_runner.py`
 
-The Travis CI system makes sure that every pull request is built for Windows, Linux, and OS X, and that unit/sanity tests are run automatically.
+The Travis CI system makes sure that every pull request is built for Windows, Linux, and macOS, and that unit/sanity tests are run automatically.
 
 ### Manual Quality Assurance (QA) Testing
 
@@ -64,3 +62,17 @@ Changes should be tested by somebody other than the developer who wrote the
 code. This is especially important for large or high-risk changes. It is useful
 to add a test plan to the pull request description if testing the changes is
 not straightforward.
+
+Translations
+------------
+
+Changes to translations as well as new translations can be submitted to
+[Bitcoin Core's Transifex page](https://www.transifex.com/bitcoin/bitcoin/).
+
+Translations are periodically pulled from Transifex and merged into the git repository. See the
+[translation process](doc/translation_process.md) for details on how this works.
+
+**Important**: We do not accept translation changes as GitHub pull requests because the next
+pull from Transifex would automatically overwrite them again.
+
+Translators should also subscribe to the [mailing list](https://groups.google.com/forum/#!forum/bitcoin-translators).

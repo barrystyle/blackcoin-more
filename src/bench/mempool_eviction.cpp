@@ -1,25 +1,22 @@
-// Copyright (c) 2011-2015 The Bitcoin Core developers
+// Copyright (c) 2011-2019 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "bench.h"
-#include "policy/policy.h"
-#include "txmempool.h"
+#include <bench/bench.h>
+#include <policy/policy.h>
+#include <txmempool.h>
 
-#include <list>
-#include <vector>
 
-static void AddTx(const CTransaction& tx, const CAmount& nFee, CTxMemPool& pool)
+static void AddTx(const CTransactionRef& tx, const CAmount& nFee, CTxMemPool& pool) EXCLUSIVE_LOCKS_REQUIRED(cs_main, pool.cs)
 {
     int64_t nTime = 0;
-    double dPriority = 10.0;
     unsigned int nHeight = 1;
     bool spendsCoinbase = false;
-    unsigned int sigOpCost = 4;
+    unsigned int SigOpCount = 4;
     LockPoints lp;
-    pool.addUnchecked(tx.GetHash(), CTxMemPoolEntry(
-                                        tx, nFee, nTime, dPriority, nHeight, pool.HasNoInputsOf(tx),
-                                        tx.GetValueOut(), spendsCoinbase, sigOpCost, lp));
+    pool.addUnchecked(CTxMemPoolEntry(
+                                         tx, nFee, nTime, nHeight,
+                                         spendsCoinbase, SigOpCount, lp));
 }
 
 // Right now this is only testing eviction performance in an extremely small
@@ -97,19 +94,28 @@ static void MempoolEviction(benchmark::State& state)
     tx7.vout[1].scriptPubKey = CScript() << OP_7 << OP_EQUAL;
     tx7.vout[1].nValue = 10 * COIN;
 
-    CTxMemPool pool(CFeeRate(1000));
+    CTxMemPool pool;
+    LOCK2(cs_main, pool.cs);
+    // Create transaction references outside the "hot loop"
+    const CTransactionRef tx1_r{MakeTransactionRef(tx1)};
+    const CTransactionRef tx2_r{MakeTransactionRef(tx2)};
+    const CTransactionRef tx3_r{MakeTransactionRef(tx3)};
+    const CTransactionRef tx4_r{MakeTransactionRef(tx4)};
+    const CTransactionRef tx5_r{MakeTransactionRef(tx5)};
+    const CTransactionRef tx6_r{MakeTransactionRef(tx6)};
+    const CTransactionRef tx7_r{MakeTransactionRef(tx7)};
 
     while (state.KeepRunning()) {
-        AddTx(tx1, 10000LL, pool);
-        AddTx(tx2, 5000LL, pool);
-        AddTx(tx3, 20000LL, pool);
-        AddTx(tx4, 7000LL, pool);
-        AddTx(tx5, 1000LL, pool);
-        AddTx(tx6, 1100LL, pool);
-        AddTx(tx7, 9000LL, pool);
+        AddTx(tx1_r, 10000LL, pool);
+        AddTx(tx2_r, 5000LL, pool);
+        AddTx(tx3_r, 20000LL, pool);
+        AddTx(tx4_r, 7000LL, pool);
+        AddTx(tx5_r, 1000LL, pool);
+        AddTx(tx6_r, 1100LL, pool);
+        AddTx(tx7_r, 9000LL, pool);
         pool.TrimToSize(pool.DynamicMemoryUsage() * 3 / 4);
-        // pool.TrimToSize(tx1.GetTotalSize())
+        pool.TrimToSize(CTransaction(tx1).GetTotalSize());
     }
 }
 
-BENCHMARK(MempoolEviction);
+BENCHMARK(MempoolEviction, 41000);

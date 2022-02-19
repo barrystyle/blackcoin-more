@@ -1,21 +1,19 @@
-// Copyright (c) 2012-2015 The Bitcoin Core developers
+// Copyright (c) 2012-2019 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "main.h"
-#include "pubkey.h"
-#include "key.h"
-#include "script/script.h"
-#include "script/standard.h"
-#include "uint256.h"
-#include "test/test_bitcoin.h"
+#include <consensus/consensus.h>
+#include <consensus/tx_verify.h>
+#include <pubkey.h>
+#include <key.h>
+#include <script/script.h>
+#include <script/standard.h>
+#include <uint256.h>
+#include <test/util/setup_common.h>
 
 #include <vector>
 
-#include <boost/foreach.hpp>
 #include <boost/test/unit_test.hpp>
-
-using namespace std;
 
 // Helpers:
 static std::vector<unsigned char>
@@ -41,7 +39,7 @@ BOOST_AUTO_TEST_CASE(GetSigOpCount)
     BOOST_CHECK_EQUAL(s1.GetSigOpCount(true), 3U);
     BOOST_CHECK_EQUAL(s1.GetSigOpCount(false), 21U);
 
-    CScript p2sh = GetScriptForDestination(CScriptID(s1));
+    CScript p2sh = GetScriptForDestination(ScriptHash(s1));
     CScript scriptSig;
     scriptSig << OP_0 << Serialize(s1);
     BOOST_CHECK_EQUAL(p2sh.GetSigOpCount(scriptSig), 3U);
@@ -57,7 +55,7 @@ BOOST_AUTO_TEST_CASE(GetSigOpCount)
     BOOST_CHECK_EQUAL(s2.GetSigOpCount(true), 3U);
     BOOST_CHECK_EQUAL(s2.GetSigOpCount(false), 20U);
 
-    p2sh = GetScriptForDestination(CScriptID(s2));
+    p2sh = GetScriptForDestination(ScriptHash(s2));
     BOOST_CHECK_EQUAL(p2sh.GetSigOpCount(true), 0U);
     BOOST_CHECK_EQUAL(p2sh.GetSigOpCount(false), 0U);
     CScript scriptSig2;
@@ -67,9 +65,9 @@ BOOST_AUTO_TEST_CASE(GetSigOpCount)
 
 /**
  * Verifies script execution of the zeroth scriptPubKey of tx output and
- * zeroth scriptSig and witness of tx input.
+ * zeroth scriptSig.
  */
-ScriptError VerifyWithFlag(const CTransaction& output, const CMutableTransaction& input, int flags)
+static ScriptError VerifyWithFlag(const CTransaction& output, const CMutableTransaction& input, int flags)
 {
     ScriptError error;
     CTransaction inputi(input);
@@ -84,7 +82,7 @@ ScriptError VerifyWithFlag(const CTransaction& output, const CMutableTransaction
  * such that spendingTx spends output zero of creationTx.
  * Also inserts creationTx's output into the coins view.
  */
-void BuildTxs(CMutableTransaction& spendingTx, CCoinsViewCache& coins, CMutableTransaction& creationTx, const CScript& scriptPubKey, const CScript& scriptSig)
+static void BuildTxs(CMutableTransaction& spendingTx, CCoinsViewCache& coins, CMutableTransaction& creationTx, const CScript& scriptPubKey, const CScript& scriptSig)
 {
     creationTx.nVersion = 1;
     creationTx.vin.resize(1);
@@ -103,10 +101,10 @@ void BuildTxs(CMutableTransaction& spendingTx, CCoinsViewCache& coins, CMutableT
     spendingTx.vout[0].nValue = 1;
     spendingTx.vout[0].scriptPubKey = CScript();
 
-    coins.ModifyCoins(creationTx.GetHash())->FromTx(creationTx, 0);
+    AddCoins(coins, CTransaction(creationTx), 0);
 }
 
-BOOST_AUTO_TEST_CASE(GetTxSigOpCost)
+BOOST_AUTO_TEST_CASE(GetTxSigOpCount)
 {
     // Transaction creates outputs
     CMutableTransaction creationTx;
@@ -139,27 +137,18 @@ BOOST_AUTO_TEST_CASE(GetTxSigOpCost)
         // is not accurate.
         assert(GetTransactionSigOpCount(CTransaction(creationTx), coins, flags) == MAX_PUBKEYS_PER_MULTISIG);
         // Sanity check: script verification fails because of an invalid signature.
-        assert(VerifyWithFlag(creationTx, spendingTx, flags) == SCRIPT_ERR_CHECKMULTISIGVERIFY);
-
-        // Make sure non P2SH sigops are counted even if the flag for P2SH is
-        // not passed in.
-        assert(GetTransactionSigOpCount(CTransaction(spendingTx), coins, SCRIPT_VERIFY_NONE) == 0);
-        assert(GetTransactionSigOpCount(CTransaction(creationTx), coins, SCRIPT_VERIFY_NONE) == MAX_PUBKEYS_PER_MULTISIG);
+        assert(VerifyWithFlag(CTransaction(creationTx), spendingTx, flags) == SCRIPT_ERR_CHECKMULTISIGVERIFY);
     }
 
     // Multisig nested in P2SH
     {
         CScript redeemScript = CScript() << 1 << ToByteVector(pubkey) << ToByteVector(pubkey) << 2 << OP_CHECKMULTISIGVERIFY;
-        CScript scriptPubKey = GetScriptForDestination(CScriptID(redeemScript));
+        CScript scriptPubKey = GetScriptForDestination(ScriptHash(redeemScript));
         CScript scriptSig = CScript() << OP_0 << OP_0 << ToByteVector(redeemScript);
 
         BuildTxs(spendingTx, coins, creationTx, scriptPubKey, scriptSig);
         assert(GetTransactionSigOpCount(CTransaction(spendingTx), coins, flags) == 2);
-        assert(VerifyWithFlag(creationTx, spendingTx, flags) == SCRIPT_ERR_CHECKMULTISIGVERIFY);
-
-        // Make sure P2SH sigops are not counted if the flag for P2SH is not
-        // passed in.
-        assert(GetTransactionSigOpCount(CTransaction(spendingTx), coins, SCRIPT_VERIFY_NONE) == 0);
+        assert(VerifyWithFlag(CTransaction(creationTx), spendingTx, flags) == SCRIPT_ERR_CHECKMULTISIGVERIFY);
     }
 }
 

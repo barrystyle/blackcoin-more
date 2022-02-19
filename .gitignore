@@ -1,10 +1,14 @@
 *.tar.gz
 
 *.exe
+*.pdb
 src/blackmore
 src/blackmored
 src/blackmore-cli
 src/blackmore-tx
+src/blackmore-wallet
+src/test/fuzz
+!src/test/fuzz/*.*
 src/test/test_blackmore
 src/qt/test/test_blackmore-qt
 
@@ -122,8 +126,6 @@ linux-build
 win32-build
 test/config.ini
 test/cache/*
-qa/pull-tester/run-bitcoind-for-test.sh
-qa/pull-tester/tests_config.py
 
 !src/leveldb*/Makefile
 
@@ -132,9 +134,11 @@ qa/pull-tester/tests_config.py
 libbitcoinconsensus.pc
 contrib/devtools/split-debug.sh
 
-#Visual Studio
-.vscode/*
-.vs/*
+libbitcoinconsensus.pc
+contrib/devtools/split-debug.sh
+
+# Output from running db4 installation
+db4/
 
 # clang-check
 *.plist
@@ -142,3 +146,7 @@ contrib/devtools/split-debug.sh
 osx_volname
 dist/
 *.background.tiff
+
+# Visual Studio
+.vscode/*
+.vs/*
