@@ -473,7 +473,7 @@ bool CheckStake(std::shared_ptr<CBlock> pblock, CWallet& wallet)
 
     // verify hash target and signature of coinstake tx
     BlockValidationState state;
-    if (!CheckProofOfStake(::BlockIndex()[pblock->hashPrevBlock], *pblock->vtx[1], pblock->nBits, state, ::ChainstateActive().CoinsTip()))
+    if (!CheckProofOfStake(::BlockIndex()[pblock->hashPrevBlock], *pblock->vtx[1], pblock->nBits, state, ::ChainstateActive().CoinsTip(), pblock->vtx[1]->nTime ? pblock->vtx[1]->nTime : pblock->nTime))
         return error("CheckStake() : proof-of-stake checking failed");
 
     //// debug print
