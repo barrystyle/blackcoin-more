@@ -94,7 +94,7 @@ bool BuildChainTestingSetup::BuildChain(const CBlockIndex* pindex,
         CBlockHeader header = block->GetBlockHeader();
 
         BlockValidationState state;
-        if (!ProcessNewBlockHeaders(false, {header}, state, Params(), &pindex)) {
+        if (!ProcessNewBlockHeaders({header}, state, Params(), &pindex)) {
             return false;
         }
     }

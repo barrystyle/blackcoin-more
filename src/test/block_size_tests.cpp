@@ -3,21 +3,21 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <chainparams.h>
-#include <validation.h>
 #include <miner.h>
 #include <pubkey.h>
 #include <uint256.h>
 #include <util/time.h>
 #include <consensus/consensus.h>
 #include <consensus/validation.h>
+#include <test/util/setup_common.h>
+#include <validation.h>
 
 #include <boost/test/unit_test.hpp>
 
 BOOST_FIXTURE_TEST_SUITE(block_size_tests, TestingSetup)
 
 // Fill block with dummy transactions until it's serialized size is exactly nSize
-static void
-FillBlock(CBlock& block, unsigned int nSize)
+static void FillBlock(CBlock& block, unsigned int nSize)
 {
     assert(block.vtx.size() > 0); // Start with at least a coinbase
 
@@ -31,18 +31,18 @@ FillBlock(CBlock& block, unsigned int nSize)
     CMutableTransaction tx;
     tx.vin.resize(1);
     tx.vin[0].scriptSig = CScript() << OP_11;
-    tx.vin[0].prevout.hash = block.vtx[0].GetHash(); // passes CheckBlock, would fail if we checked inputs.
+    tx.vin[0].prevout.hash = block.vtx[0]->GetHash(); // passes CheckBlock, would fail if we checked inputs.
     tx.vin[0].prevout.n = 0;
     tx.vout.resize(1);
     tx.vout[0].nValue = 1LL;
-    tx.vout[0].scriptPubKey = block.vtx[0].vout[0].scriptPubKey;
+    tx.vout[0].scriptPubKey = block.vtx[0]->vout[0].scriptPubKey;
 
     unsigned int nTxSize = ::GetSerializeSize(tx, PROTOCOL_VERSION);
     uint256 txhash = tx.GetHash();
 
     // ... add copies of tx to the block to get close to 1MB:
     while (nBlockSize+nTxSize < nSize) {
-        block.vtx.push_back(tx);
+        block.vtx.push_back(MakeTransactionRef(tx));
         nBlockSize += nTxSize;
         tx.vin[0].prevout.hash = txhash; // ... just to make each transaction unique
         txhash = tx.GetHash();
@@ -53,7 +53,7 @@ FillBlock(CBlock& block, unsigned int nSize)
     unsigned int nFill = nSize - nBlockSize - nTxSize;
     for (unsigned int i = 0; i < nFill; i++)
         tx.vin[0].scriptSig << OP_11;
-    block.vtx.push_back(tx);
+    block.vtx.push_back(MakeTransactionRef(tx));
     nBlockSize = ::GetSerializeSize(block, PROTOCOL_VERSION);
     assert(nBlockSize == nSize);
 }
@@ -63,8 +63,9 @@ static bool TestCheckBlock(CBlock& block, uint64_t nTime, unsigned int nSize)
     SetMockTime(nTime);
     block.nTime = nTime;
     FillBlock(block, nSize);
-    CValidationState validationState;
-    bool fResult = CheckBlock(block, validationState, false, false) && validationState.IsValid();
+    BlockValidationState validationState;
+    const auto chainParams = CreateChainParams(CBaseChainParams::MAIN);
+    bool fResult = CheckBlock(block, validationState, chainParams->GetConsensus(), false, false) && validationState.IsValid();
     SetMockTime(0);
     return fResult;
 }
@@ -75,14 +76,15 @@ static bool TestCheckBlock(CBlock& block, uint64_t nTime, unsigned int nSize)
 BOOST_AUTO_TEST_CASE(TwoMegFork)
 {
 	const uint64_t BIP102_FORK_TIME = std::numeric_limits<uint64_t>::max();
-    const CChainParams& chainparams = Params(CBaseChainParams::MAIN);
+    const auto chainParams = CreateChainParams(CBaseChainParams::MAIN);
+    const CChainParams& chainparams = *chainParams;
+    std::unique_ptr<CBlockTemplate> pblocktemplate;
     CScript scriptPubKey = CScript() << ParseHex("04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5f") << OP_CHECKSIG;
-    CBlockTemplate *pblocktemplate;
 
     LOCK(cs_main);
 
-    BOOST_CHECK(pblocktemplate = CreateNewBlock(chainparams, scriptPubKey));
-    CBlock *pblock = &pblocktemplate->block;
+    BOOST_CHECK(pblocktemplate = BlockAssembler(*m_node.mempool, chainparams).CreateNewBlock(scriptPubKey));
+    CBlock *pblock = &pblocktemplate->block; // pointer for convenience
 
     // Before fork time...
     BOOST_CHECK(TestCheckBlock(*pblock, BIP102_FORK_TIME-1, 1000*1000)); // 1MB : valid
