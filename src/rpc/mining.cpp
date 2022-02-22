@@ -976,6 +976,7 @@ UniValue checkkernel(const JSONRPCRequest& request)
         if (!fCreateBlockTemplate)
             return result;
 
+#ifdef ENABLE_WALLET
         int64_t nFees;
         std::shared_ptr<CWallet> const wallet = GetWalletForJSONRPCRequest(request);
         CWallet* const pwallet = wallet.get();
@@ -1011,7 +1012,7 @@ UniValue checkkernel(const JSONRPCRequest& request)
 
         result.pushKV("blocktemplatesignkey", HexStr(pubkey));
         */
-
+#endif
         return result;
 }
 

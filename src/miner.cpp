@@ -463,6 +463,7 @@ void IncrementExtraNonce(CBlock* pblock, const CBlockIndex* pindexPrev, unsigned
     pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
 }
 
+#ifdef ENABLE_WALLET
 bool CheckStake(std::shared_ptr<CBlock> pblock, CWallet& wallet)
 {
     uint256 hashBlock = pblock->GetHash();
@@ -667,3 +668,4 @@ bool SignBlock(std::shared_ptr<CBlock> pblock, CWallet& wallet, int64_t& nFees, 
 
     return false;
 }
+#endif
