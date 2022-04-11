@@ -169,7 +169,6 @@ bool CheckKernel(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t nTime, co
 
 bool CheckKernel(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t nTime, const COutPoint& prevout, CCoinsViewCache& view, const std::map<COutPoint, CStakeCache>& cache)
 {
-    uint256 hashProofOfStake, targetProofOfStake;
     auto it = cache.find(prevout);
 
     if (it == cache.end()) {
