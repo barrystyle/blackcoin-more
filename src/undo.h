@@ -29,7 +29,7 @@ struct TxInUndoFormatter
             // Required to maintain compatibility with older undo format.
             ::Serialize(s, (unsigned char)0);
         }
-        ::Serialize(s, txout.nTime);
+        ::Serialize(s, VARINT(txout.nTime));
         ::Serialize(s, Using<TxOutCompression>(txout.out));
     }
 
