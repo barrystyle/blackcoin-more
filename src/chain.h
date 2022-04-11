@@ -379,10 +379,6 @@ public:
         if (obj.nStatus & BLOCK_HAVE_DATA) READWRITE(VARINT(obj.nDataPos));
         if (obj.nStatus & BLOCK_HAVE_UNDO) READWRITE(VARINT(obj.nUndoPos));
 
-        READWRITE(obj.nHashBlock);
-        READWRITE(obj.nFlags);
-        READWRITE(obj.nStakeModifier);
-
         // block header
         READWRITE(obj.nVersion);
         READWRITE(obj.hashPrev);
@@ -390,6 +386,11 @@ public:
         READWRITE(obj.nTime);
         READWRITE(obj.nBits);
         READWRITE(obj.nNonce);
+
+        // PoS fields
+        READWRITE(obj.nHashBlock);
+        READWRITE(obj.nFlags);
+        READWRITE(obj.nStakeModifier);
     }
 
     uint256 GetBlockHash() const
