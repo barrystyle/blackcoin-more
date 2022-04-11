@@ -55,7 +55,7 @@ struct PrecomputedTransactionData;
 struct LockPoints;
 
 /** Minimum fee for transactions */
-static const unsigned int MIN_TX_FEE = 10000;
+static const unsigned int MIN_TX_FEE_PER_KB = 100000;
 /** Default for -minrelaytxfee, minimum relay fee for transactions */
 static const unsigned int DEFAULT_MIN_RELAY_TX_FEE = 10000;
 /** Default for -limitancestorcount, max number of in-mempool ancestors */

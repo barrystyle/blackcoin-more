@@ -10,6 +10,7 @@
 #include <script/standard.h>
 #include <consensus/validation.h>
 #include <validation.h>
+#include <wallet/wallet.h>
 
 // TODO remove the following dependencies
 #include <chain.h>
@@ -223,9 +224,12 @@ CAmount GetMinFee(size_t nBytes, uint32_t nTime)
     CAmount nMinFee;
 
     if (Params().GetConsensus().IsProtocolV3_1(nTime))
-        nMinFee = (1 + (CAmount)nBytes / 1000) * MIN_TX_FEE;
-    else
-        nMinFee = MIN_TX_FEE;
+        nMinFee = (1 + (CAmount)nBytes / 1000) * MIN_TX_FEE_PER_KB;
+    else {
+        nMinFee = ::minRelayTxFee.GetFee(nBytes);
+        if (nMinFee < DEFAULT_TRANSACTION_MINFEE)
+    	    nMinFee = DEFAULT_TRANSACTION_MINFEE;
+    }
 
     if (!MoneyRange(nMinFee))
         nMinFee = MAX_MONEY;

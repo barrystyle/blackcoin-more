@@ -3093,7 +3093,7 @@ bool CWallet::CreateTransaction(interfaces::Chain::Lock& locked_chain, const std
 
             CFeeRate discard_rate = chain().relayDustFee();
 
-            nFeeRet = MIN_TX_FEE;
+            nFeeRet = Params().GetConsensus().IsProtocolV3_1_2(txNew.nTime) ? MIN_TX_FEE_PER_KB : 0;
             bool pick_new_inputs = true;
             CAmount nValueIn = 0;
 
