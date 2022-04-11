@@ -3228,7 +3228,7 @@ bool CWallet::CreateTransaction(interfaces::Chain::Lock& locked_chain, const std
                     return false;
                 }
 
-                nFeeNeeded = GetMinFee(nBytes, txNew.nVersion < 2 ? txNew.nTime : Params().GetConsensus().nProtocolV3_1Time);
+                nFeeNeeded = GetMinFee(nBytes, txNew.nVersion < 2 ? txNew.nTime : GetAdjustedTime());
 
                 if (nFeeRet >= nFeeNeeded) {
                     // Reduce fee to only the needed amount if possible. This
