@@ -521,18 +521,16 @@ bool MemPoolAccept::PreChecks(ATMPArgs& args, Workspace& ws)
     std::unique_ptr<CTxMemPoolEntry>& entry = ws.m_entry;
     CAmount& nModifiedFees = ws.m_modified_fees;
 
-    /*
-    // Blackcoin ToDo: decide whether to add this additional check or not
+    // Blackcoin ToDo: decide whether to enable this additional check or not
     int dust_tx_count = 0;
     CAmount min_dust = 100000;
     for (const CTxOut& txout : tx.vout) {
-        // LogPrintf("tx_out value %d, minimum value %d dust count %d", txout.nValue, min_dust, dust_tx_count);
+        // LogPrintf("tx_out value %d, minimum value %d, dust count %d", txout.nValue, min_dust, dust_tx_count);
         if (txout.nValue < min_dust)
-            dust_tx_count = dust_tx_count + 1;
+            dust_tx_count++;
         if (dust_tx_count > 10)
             return state.DoS(0, false, REJECT_DUST, "too many dust vouts");
     }
-    */
 
     if (!CheckTransaction(tx, state))
         return false; // state filled in by CheckTransaction
@@ -629,9 +627,10 @@ bool MemPoolAccept::PreChecks(ATMPArgs& args, Workspace& ws)
         return error("%s: Consensus::CheckTxInputs: %s, %s", __func__, tx.GetHash().ToString(), state.ToString());
     }
 
-    //Blackcoin ToDo:
+    // Blackcoin ToDo: enable!
     /*
-    if (nFees < GetMinFee(tx, tx.nTime ? tx.nTime : GetAdjustedTime()))
+    // Blackcoin: Minimum fee check
+    if (Params().GetConsensus().IsProtocolV3_1_2(tx.nTime ? tx.nTime : GetAdjustedTime()) && nFees < GetMinFee(tx, tx.nTime ? tx.nTime : GetAdjustedTime()))
         return state.Invalid(TxValidationResult::TX_CONSENSUS, "fee is below minimum");
     */
 
