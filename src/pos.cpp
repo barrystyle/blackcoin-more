@@ -76,9 +76,9 @@ bool CheckStakeBlockTimestamp(int64_t nTimeBlock)
 //   quantities so as to generate blocks faster, degrading the system back into
 //   a proof-of-work situation.
 //
-bool CheckStakeKernelHash(const CBlockIndex* pindexPrev, unsigned int nBits, unsigned int prevTime, CAmount prevoutValue, const COutPoint& prevout, unsigned int nTimeTx, bool fPrintProofOfStake)
+bool CheckStakeKernelHash(const CBlockIndex* pindexPrev, unsigned int nBits, unsigned int blockFromTime, CAmount prevoutValue, const COutPoint& prevout, unsigned int nTimeTx, bool fPrintProofOfStake)
 {
-    if (nTimeTx < prevTime)  // Transaction timestamp violation
+    if (nTimeTx < blockFromTime)  // Transaction timestamp violation
         return error("CheckStakeKernelHash() : nTime violation");
 
     // Base target
@@ -97,15 +97,15 @@ bool CheckStakeKernelHash(const CBlockIndex* pindexPrev, unsigned int nBits, uns
     // Calculate hash
     CHashWriter ss(SER_GETHASH, 0);
     ss << nStakeModifier;
-    ss << prevTime << prevout.hash << prevout.n << nTimeTx;
+    ss << blockFromTime << prevout.hash << prevout.n << nTimeTx;
 
     uint256 hashProofOfStake = ss.GetHash();
 
     if (fPrintProofOfStake)
     {
-        LogPrintf("CheckStakeKernelHash() : nStakeModifier=%s, txPrev.nTime=%u, txPrev.vout.hash=%s, txPrev.vout.n=%u, nTime=%u, hashProof=%s\n",
+        LogPrintf("CheckStakeKernelHash() : nStakeModifier=%s, txPrev.nTime=%u, txPrev.vout.hash=%s, txPrev.vout.n=%u, nTimeTx=%u, hashProof=%s\n",
             nStakeModifier.GetHex().c_str(),
-            prevTime, prevout.hash.ToString(), prevout.n, nTimeTx,
+            blockFromTime, prevout.hash.ToString(), prevout.n, nTimeTx,
             hashProofOfStake.ToString());
     }
 
@@ -115,9 +115,9 @@ bool CheckStakeKernelHash(const CBlockIndex* pindexPrev, unsigned int nBits, uns
         
     if (LogInstance().WillLogCategory(BCLog::COINSTAKE) && !fPrintProofOfStake)
     {
-        LogPrintf("CheckStakeKernelHash() : nStakeModifier=%s, txPrev.nTime=%u, txPrev.vout.hash=%s, txPrev.vout.n=%u, nTime=%u, hashProof=%s\n",
+        LogPrintf("CheckStakeKernelHash() : nStakeModifier=%s, txPrev.nTime=%u, txPrev.vout.hash=%s, txPrev.vout.n=%u, nTimeTx=%u, hashProof=%s\n",
             nStakeModifier.GetHex().c_str(),
-            prevTime, prevout.hash.ToString(), prevout.n, nTimeTx,
+            blockFromTime, prevout.hash.ToString(), prevout.n, nTimeTx,
             hashProofOfStake.ToString());
     }
 
