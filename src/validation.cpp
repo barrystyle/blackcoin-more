@@ -529,7 +529,7 @@ bool MemPoolAccept::PreChecks(ATMPArgs& args, Workspace& ws)
         if (txout.nValue < min_dust)
             dust_tx_count++;
         if (dust_tx_count > 10)
-            return state.DoS(0, false, REJECT_DUST, "too many dust vouts");
+            return state.Invalid(TxValidationResult::TX_MEMPOOL_POLICY, "too-many-dust-vouts");
     }
 
     if (!CheckTransaction(tx, state))
