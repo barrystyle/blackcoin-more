@@ -201,7 +201,6 @@ bool Consensus::CheckTxInputs(const CTransaction& tx, TxValidationState& state, 
         // Blackcoin: Minimum fee check
         if (Params().IsProtocolV3_1(nTimeTx) && txfee_aux < GetMinFee(tx, nTimeTx))
             return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-fee-not-enough");
-        }
 
         txfee = txfee_aux; 
     }
