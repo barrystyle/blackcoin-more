@@ -627,12 +627,9 @@ bool MemPoolAccept::PreChecks(ATMPArgs& args, Workspace& ws)
         return error("%s: Consensus::CheckTxInputs: %s, %s", __func__, tx.GetHash().ToString(), state.ToString());
     }
 
-    // Blackcoin ToDo: enable!
-    /*
     // Blackcoin: Minimum fee check
-    if (Params().GetConsensus().IsProtocolV3_1_2(tx.nTime ? tx.nTime : GetAdjustedTime()) && nFees < GetMinFee(tx, tx.nTime ? tx.nTime : GetAdjustedTime()))
-        return state.Invalid(TxValidationResult::TX_CONSENSUS, "fee is below minimum");
-    */
+    if (Params().GetConsensus().IsProtocolV3_1(tx.nTime ? tx.nTime : GetAdjustedTime()) && nFees < GetMinFee(tx, tx.nTime ? tx.nTime : GetAdjustedTime()))
+        return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-fee-not-enough");
 
     // Check for non-standard pay-to-script-hash in inputs
     if (fRequireStandard && !AreInputsStandard(tx, m_view)) {
