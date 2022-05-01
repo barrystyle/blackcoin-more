@@ -107,7 +107,7 @@ public:
         consensus.nCoinbaseMaturity = 500;
 
         // The best chain should have at least this much work.
-        consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000029f1452903d2f781416");
+        consensus.nMinimumChainWork = uint256S("0x000000000000000000000000000000000000000000000348dfccea264e4b8235");
 
         // By default assume that the signatures in ancestors of this block are valid.
         consensus.defaultAssumeValid = uint256S("0x36442d872ca6a66c65caef4d9468b8add290accc8cf7ec386eee50e62721ed3d"); //2400000
@@ -133,9 +133,8 @@ public:
 
         vSeeds.emplace_back("dnsseed.blackcoin.nl"); // hosted at dns.blackcoin.nl
         vSeeds.emplace_back("dnsseed2.blackcoin.nl"); // hosted at vps.blackcoin.nl
-        // vSeeds.push_back(CDNSSeedData("vasin.nl", "dnsseed.vasin.nl")); // Disabled for now
         vSeeds.emplace_back("ghost.blackcoin.nl"); // Michel van Kessel static node
-        vSeeds.emplace_back("node.blackcoin.io");  // payBLK static node
+        vSeeds.emplace_back("node.blackcoin.nl");  // payBLK static node
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,25);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,85);
@@ -216,7 +215,7 @@ public:
         nDefaultPort = 25714;
 
         // The best chain should have at least this much work.
-        consensus.nMinimumChainWork = uint256S("0x00");
+        consensus.nMinimumChainWork = uint256S("0x0000000000000000000000000000000000000000000000302f630a91c2ec0230");
 
         // By default assume that the signatures in ancestors of this block are valid.
         consensus.defaultAssumeValid = uint256S("0x00");
