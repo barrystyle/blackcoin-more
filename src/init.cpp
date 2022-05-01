@@ -1462,14 +1462,6 @@ bool AppInitMain(NodeContext& node)
         LogPrintf("Using /16 prefix for IP bucketing\n");
     }
 
-#ifdef ENABLE_WALLET
-    nDonationPercentage = gArgs.GetArg("-donatetodevfund", DEFAULT_DONATION_PERCENTAGE);
-    if (nDonationPercentage < 0)
-        nDonationPercentage = 0;
-    else if (nDonationPercentage > 95)
-        nDonationPercentage = 95;
-#endif
-
 #if ENABLE_ZMQ
     g_zmq_notification_interface = CZMQNotificationInterface::Create();
 
