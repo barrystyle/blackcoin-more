@@ -230,7 +230,7 @@ static void MutateTxAddInput(CMutableTransaction& tx, const std::string& strInpu
     }
 
     static const unsigned int minTxOutSz = 9;
-    static const unsigned int maxVout = Params().GetConsensus().MaxBlockSize(std::numeric_limits<uint64_t>::max()) / minTxOutSz;
+    static const unsigned int maxVout = MAX_BLOCK_SIZE / minTxOutSz;
 
     // extract and validate vout
     const std::string& strVout = vStrInputParts[1];

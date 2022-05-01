@@ -65,8 +65,8 @@ BlockAssembler::BlockAssembler(const CTxMemPool& mempool, const CChainParams& pa
       m_mempool(mempool)
 {
     blockMinFeeRate = options.blockMinFeeRate;
-    // Limit size to between 1K and MaxBlockSize()-1K for sanity:
-    nBlockMaxSize = std::max<size_t>(1000, std::min<size_t>(Params().GetConsensus().MaxBlockSize(std::numeric_limits<uint64_t>::max()) - 1000, options.nBlockMaxSize));
+    // Limit size to between 1K and MAX_BLOCK_SIZE-1K for sanity:
+    nBlockMaxSize = std::max<size_t>(1000, std::min<size_t>(MAX_BLOCK_SIZE - 1000, options.nBlockMaxSize));
 }
 
 static BlockAssembler::Options DefaultOptions()
@@ -140,7 +140,7 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
 
     int nPackagesSelected = 0;
     int nDescendantsUpdated = 0;
-    addPackageTxs(nPackagesSelected, nDescendantsUpdated, (int64_t)pblock->nTime);
+    addPackageTxs(nPackagesSelected, nDescendantsUpdated);
 
     int64_t nTime1 = GetTimeMicros();
 
@@ -149,7 +149,6 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
 
     // Create coinbase transaction.
     CMutableTransaction coinbaseTx;
-    coinbaseTx.nTime = pblock->nTime;
     coinbaseTx.vin.resize(1);
     coinbaseTx.vin[0].prevout.SetNull();
     coinbaseTx.vout.resize(1);
@@ -204,12 +203,12 @@ void BlockAssembler::onlyUnconfirmed(CTxMemPool::setEntries& testSet)
     }
 }
 
-bool BlockAssembler::TestPackage(uint64_t packageSize, int64_t packageSigOps, int64_t blockTime) const
+bool BlockAssembler::TestPackage(uint64_t packageSize, int64_t packageSigOps) const
 {
     auto blockSizeWithPackage = nBlockSize + packageSize;
     if (blockSizeWithPackage >= DEFAULT_BLOCK_MAX_SIZE)
         return false;
-    if (nBlockSigOps + packageSigOps >= Params().GetConsensus().MaxBlockSigOps(blockTime))
+    if (nBlockSigOps + packageSigOps >= MAX_BLOCK_SIGOPS)
         return false;
     return true;
 }
@@ -315,7 +314,7 @@ void BlockAssembler::SortForBlock(const CTxMemPool::setEntries& package, std::ve
 // Each time through the loop, we compare the best transaction in
 // mapModifiedTxs with the next transaction in the mempool to decide what
 // transaction package to work on next.
-void BlockAssembler::addPackageTxs(int &nPackagesSelected, int &nDescendantsUpdated, int64_t blockTime)
+void BlockAssembler::addPackageTxs(int &nPackagesSelected, int &nDescendantsUpdated)
 {
     // mapModifiedTx will store sorted packages after they are modified
     // because some of their txs are already in the block
@@ -388,7 +387,7 @@ void BlockAssembler::addPackageTxs(int &nPackagesSelected, int &nDescendantsUpda
             return;
         }
 
-        if (!TestPackage(packageSize, packageSigOps, blockTime)) {
+        if (!TestPackage(packageSize, packageSigOps)) {
             if (fUsingModified) {
                 // Since we always look at the best entry in mapModifiedTx,
                 // we must erase failed entries so that we can consider the
@@ -650,7 +649,12 @@ bool SignBlock(std::shared_ptr<CBlock> pblock, CWallet& wallet, int64_t& nFees, 
         {
             // make sure coinstake would meet timestamp protocol
             // as it would be the same as the block timestamp
-            pblock->nTime = txCoinBase.nTime = txCoinStake.nTime = nTimeBlock;
+            if (txCoinBase.nVersion < 2)
+                pblock->nTime = txCoinBase.nTime = txCoinStake.nTime = nTimeBlock;
+            else {
+                pblock->nTime = nTimeBlock;
+                txCoinBase.nTime = txCoinStake.nTime = 0;
+            }
             pblock->vtx[0] = MakeTransactionRef(std::move(txCoinBase));
 
             // we have to make sure that we have no future timestamps in

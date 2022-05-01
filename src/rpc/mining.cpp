@@ -295,11 +295,10 @@ UniValue getstakinginfo(const JSONRPCRequest& request)
     }
 #endif
 
-    uint64_t nNetworkWeight = GetPoSKernelPS();
+    uint64_t nNetworkWeight = 1.1429 * GetPoSKernelPS();
     bool staking = lastCoinStakeSearchInterval && nWeight;
 
-    const Consensus::Params& consensusParams = Params().GetConsensus();
-    int64_t nTargetSpacing = consensusParams.nTargetSpacing;
+    int64_t nTargetSpacing = Params().GetConsensus().nTargetSpacing;
     uint64_t nExpectedTime = staking ? 1.0455 * nTargetSpacing * nNetworkWeight / nWeight : 0;
 
     UniValue obj(UniValue::VOBJ);
@@ -743,8 +742,8 @@ static UniValue getblocktemplate(const JSONRPCRequest& request)
     result.pushKV("mintime", (int64_t)pindexPrev->GetMedianTimePast()+1);
     result.pushKV("mutable", aMutable);
     result.pushKV("noncerange", "00000000ffffffff");
-    result.pushKV("sigoplimit", (int64_t)Params().GetConsensus().MaxBlockSigOps(pblock->nTime));
-    result.pushKV("sizelimit", (int64_t)Params().GetConsensus().MaxBlockSize(pblock->nTime));
+    result.pushKV("sigoplimit", (int64_t)MAX_BLOCK_SIGOPS_COST);
+    result.pushKV("sizelimit", (int64_t)MAX_BLOCK_SIZE);
     result.pushKV("curtime", pblock->GetBlockTime());
     result.pushKV("bits", strprintf("%08x", pblock->nBits));
     result.pushKV("height", (int64_t)(pindexPrev->nHeight+1));

@@ -115,6 +115,7 @@ class TestHeaderAndShortIDs {
 public:
     CBlockHeader header;
     uint64_t nonce;
+    std::vector<unsigned char> vchBlockSig;
     std::vector<uint64_t> shorttxids;
     std::vector<unsigned char> vchBlockSig;
     std::vector<PrefilledTransaction> prefilledtxn;

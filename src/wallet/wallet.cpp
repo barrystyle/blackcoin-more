@@ -270,6 +270,7 @@ WalletCreationStatus CreateWallet(interfaces::Chain& chain, const SecureString& 
 const uint256 CWalletTx::ABANDON_HASH(UINT256_ONE());
 
 CAmount nMinimumInputValue = 0;
+unsigned int nDonationPercentage = DEFAULT_DONATION_PERCENTAGE;
 
 /** @defgroup mapWallet
  *
@@ -848,26 +849,67 @@ bool CWallet::CreateCoinStake(interfaces::Chain::Lock& locked_chain, const Filla
         }
     }
 
-    // Calculate reward
-    {
-        int64_t nReward = nFees + GetProofOfStakeSubsidy();
-        if (nReward < 0)
-           return false;
+    // Blackcoin: Donate to dev fund (or not)
+    if (nDonationPercentage > 0) {
 
-        nCredit += nReward;
+        CAmount nDevCredit = 0;
+        CAmount nMinerCredit = 0;
+
+        // Calculate reward
+        {
+            int64_t nReward = nFees + GetProofOfStakeSubsidy();
+            if (nReward < 0)
+                return false;
+
+            nDevCredit = (GetProofOfStakeSubsidy() * nDonationPercentage) / 100;
+            nMinerCredit = nReward - nDevCredit;
+            nCredit += nMinerCredit;
+        }
+
+        // Split stake
+        if (nCredit >= GetStakeSplitThreshold() /* && nDonationPercentage != 100 */)
+            txNew.vout.push_back(CTxOut(0, txNew.vout[1].scriptPubKey));
+
+        txNew.vout.push_back(CTxOut(0, Params().GetDevRewardScript()));
+
+        // Set output amount
+        if (txNew.vout.size() == 4)
+        {
+            txNew.vout[1].nValue = (nCredit / 2 / CENT) * CENT;
+            txNew.vout[2].nValue = nCredit - txNew.vout[1].nValue;
+            txNew.vout[3].nValue = nDevCredit;
+        }
+        else
+        {
+            txNew.vout[1].nValue = nCredit;
+            txNew.vout[2].nValue = nDevCredit;
+        }
     }
+    else {
+        // Calculate reward
+        {
+            int64_t nReward = nFees + GetProofOfStakeSubsidy();
+            if (nReward < 0)
+                return false;
 
-    if (nCredit >= GetStakeSplitThreshold())
-        txNew.vout.push_back(CTxOut(0, txNew.vout[1].scriptPubKey)); //split stake
+            nCredit += nReward;
+        }
 
-    // Set output amount
-    if (txNew.vout.size() == 3)
-    {
-        txNew.vout[1].nValue = (nCredit / 2 / CENT) * CENT;
-        txNew.vout[2].nValue = nCredit - txNew.vout[1].nValue;
+        // Split stake
+        if (nCredit >= GetStakeSplitThreshold())
+            txNew.vout.push_back(CTxOut(0, txNew.vout[1].scriptPubKey));
+
+        // Set output amount
+        if (txNew.vout.size() == 3)
+        {
+            txNew.vout[1].nValue = (nCredit / 2 / CENT) * CENT;
+            txNew.vout[2].nValue = nCredit - txNew.vout[1].nValue;
+        }
+        else
+        {
+            txNew.vout[1].nValue = nCredit;
+        }
     }
-    else
-        txNew.vout[1].nValue = nCredit;
 
     // Sign
     int nIn = 0;
@@ -2450,6 +2492,7 @@ CWallet::Balance CWallet::GetBalance(const int min_depth, bool avoid_reuse) cons
             ret.m_mine_stake += wtx.GetStakeCredit();
             ret.m_watchonly_stake += wtx.GetStakeWatchOnlyCredit();
         }
+        ret.m_donation_percentage = nDonationPercentage;
     }
     return ret;
 }
@@ -3043,6 +3086,7 @@ bool CWallet::CreateTransaction(interfaces::Chain::Lock& locked_chain, const std
     }
 
     CMutableTransaction txNew;
+	txNew.nVersion = gArgs.GetArg("-txversion", CTransaction::CURRENT_VERSION);
 
     txNew.nLockTime = GetLocktimeForNewTransaction(chain(), locked_chain);
 

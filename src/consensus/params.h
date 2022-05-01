@@ -74,14 +74,10 @@ struct Params {
     int64_t nProtocolV2Time;
     int64_t nProtocolV3Time;
     int64_t nProtocolV3_1Time;
-    int64_t nProtocolV3_2Time;
     bool IsProtocolV1RetargetingFixed(int64_t nTime) const { return nTime > nProtocolV1RetargetingFixedTime && nTime != 1395631999; }
     bool IsProtocolV2(int64_t nTime) const { return nTime > nProtocolV2Time && nTime != 1407053678; }
     bool IsProtocolV3(int64_t nTime) const { return nTime > nProtocolV3Time && nTime != 1444028400; }
     bool IsProtocolV3_1(int64_t nTime) const { return nTime > nProtocolV3_1Time && nTime != 4102437600; }
-    bool IsProtocolV3_2(int64_t nTime) const { return nTime > nProtocolV3_2Time && nTime != 4733503200; }
-    unsigned int MaxBlockSize(int64_t nTime) const { return IsProtocolV3_2(nTime) ? MAX_BLOCK_SIZE : MAX_BLOCK_SIZE_LEGACY; }
-    unsigned int MaxBlockSigOps(int64_t nTime) const { return MaxBlockSize(nTime) / 50; }
     int nLastPOWBlock;
     int nStakeTimestampMask;
     int nCoinbaseMaturity;

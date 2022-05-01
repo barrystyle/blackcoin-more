@@ -224,7 +224,7 @@ CAmount GetMinFee(size_t nBytes, uint32_t nTime)
     else {
         nMinFee = ::minRelayTxFee.GetFee(nBytes);
         if (nMinFee < DEFAULT_TRANSACTION_MINFEE)
-    	    nMinFee = DEFAULT_TRANSACTION_MINFEE;
+            nMinFee = DEFAULT_TRANSACTION_MINFEE;
     }
 
     if (!MoneyRange(nMinFee))

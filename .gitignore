@@ -137,8 +137,8 @@ contrib/devtools/split-debug.sh
 libbitcoinconsensus.pc
 contrib/devtools/split-debug.sh
 
-# Output from running db4 installation
-db4/
+# Output from running db6 installation
+db6/
 
 # clang-check
 *.plist

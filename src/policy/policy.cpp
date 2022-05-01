@@ -63,8 +63,6 @@ bool IsStandard(const CScript& scriptPubKey, txnouttype& whichType)
 
 bool IsStandardTx(const CTransaction& tx, bool permit_bare_multisig, const CFeeRate& dust_relay_fee, std::string& reason)
 {
-    //Blackcoin ToDo: enable after fork
-    //if (tx.nVersion > CTransaction::MAX_STANDARD_VERSION || tx.nVersion < 1) {
     if ((!Params().GetConsensus().IsProtocolV3_1(tx.nTime) && (tx.nVersion > CTransaction::MAX_STANDARD_VERSION-1)) || tx.nVersion < 1) {
         reason = "version";
         return false;

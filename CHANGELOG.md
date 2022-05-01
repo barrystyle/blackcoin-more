@@ -1,7 +1,21 @@
 # Changelog
 
-## v2.20.2.0 (?)
+## 20.2.0 (?)
 - ?
+
+## 13.2.0 (?)
+- ?
+
+## v2.13.2.9 (2022-02-24)
+- Updated leveldb, which should resolve the "missing UTXO" staking issue
+- Updated dependencies and ported build system from Bitcoin Core 0.20+
+- Updated crypto and added CRC32 for ARM64
+- Updated univalue to v1.0.3
+- Updated to Qt v5.12.11
+- Updated to OpenSSL v1.1.1m
+- Added "getstakereport" RPC call
+- Added --use-sse2 to enable SSE2
+- Code cleanup (headers, names, etc)
 
 ## v2.13.2.8 (2021-02-24)
 - Immediately ban clients operating on forked chains older than nMaxReorganizationDepth

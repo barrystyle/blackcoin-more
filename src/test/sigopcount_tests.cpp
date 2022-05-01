@@ -120,7 +120,7 @@ BOOST_AUTO_TEST_CASE(GetTxSigOpCount)
     key.MakeNewKey(true);
     CPubKey pubkey = key.GetPubKey();
     // Default flags
-    unsigned int flags = SCRIPT_VERIFY_P2SH;
+    int flags = SCRIPT_VERIFY_P2SH;
 
     // Multisig script
     {

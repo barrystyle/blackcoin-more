@@ -525,7 +525,7 @@ bool MemPoolAccept::PreChecks(ATMPArgs& args, Workspace& ws)
     int dust_tx_count = 0;
     CAmount min_dust = 100000;
     for (const CTxOut& txout : tx.vout) {
-        // LogPrintf("tx_out value %d, minimum value %d, dust count %d", txout.nValue, min_dust, dust_tx_count);
+        // LogPrintf("tx_out value: %d, minimum value: %d, dust count: %d", txout.nValue, min_dust, dust_tx_count);
         if (txout.nValue < min_dust)
             dust_tx_count++;
         if (dust_tx_count > 10)
@@ -542,6 +542,13 @@ bool MemPoolAccept::PreChecks(ATMPArgs& args, Workspace& ws)
     // ppcoin: coinstake is also only valid in a block, not as a loose transaction
     if (tx.IsCoinStake())
         return state.Invalid(TxValidationResult::TX_CONSENSUS, "coinstake");
+
+    // Don't relay version 2 transactions until CSV is active, and we can be
+    // sure that such transactions will be mined (unless we're on
+    // -testnet/-regtest).
+    if (fRequireStandard && tx.nVersion >= 2 && !Params().GetConsensus().IsProtocolV3_1(tx.nTime ? tx.nTime : GetAdjustedTime()))
+		return state.Invalid(TxValidationResult::TX_NOT_STANDARD, "premature-version2-tx");
+    }
 
     // Rather not work on nonstandard transactions (unless -testnet/-regtest)
     std::string reason;
@@ -561,7 +568,7 @@ bool MemPoolAccept::PreChecks(ATMPArgs& args, Workspace& ws)
         return state.Invalid(TxValidationResult::TX_PREMATURE_SPEND, "non-final");
 
     // For the same reasons as in the case with non-final transactions
-    if (tx.nTime ? tx.nTime : GetAdjustedTime() > FutureDrift(GetAdjustedTime())) {
+    if ((tx.nTime ? tx.nTime : GetAdjustedTime()) > FutureDrift(GetAdjustedTime())) {
         return state.Invalid(TxValidationResult::TX_PREMATURE_SPEND, "time-too-new");
     }
 
@@ -1699,9 +1706,6 @@ bool CChainState::ConnectBlock(const CBlock& block, BlockValidationState& state,
         return false; // do not error here as we expect this during initial block download
     }
 
-    // Set proof-of-stake hash modifier
-    pindex->nStakeModifier = ComputeStakeModifier(pindex->pprev, block.IsProofOfStake() ? block.vtx[1]->vin[0].prevout.hash : block.GetHash());
-
     nBlocksTotal++;
 
     // Special case for the genesis block, skipping connection of its transactions
@@ -1830,7 +1834,7 @@ bool CChainState::ConnectBlock(const CBlock& block, BlockValidationState& state,
         // * legacy (always)
         // * p2sh (when P2SH enabled in flags and excludes coinbase)
         nSigOpsCount += GetTransactionSigOpCount(tx, view, flags);
-        if (nSigOpsCount > chainparams.GetConsensus().MaxBlockSigOps(block.GetBlockTime())) {
+        if (nSigOpsCount > MAX_BLOCK_SIGOPS) {
             LogPrintf("ERROR: ConnectBlock(): too many sigops\n");
             return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-blk-sigops");
         }
@@ -1880,6 +1884,9 @@ bool CChainState::ConnectBlock(const CBlock& block, BlockValidationState& state,
             return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cs-amount");
         }
     }
+
+    // Set proof-of-stake hash modifier
+    pindex->nStakeModifier = ComputeStakeModifier(pindex->pprev, block.IsProofOfStake() ? block.vtx[1]->vin[0].prevout.hash : block.GetHash());
 
     if (!control.Wait()) {
         LogPrintf("ERROR: %s: CheckQueue failed\n", __func__);
@@ -3071,8 +3078,7 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
     // because we receive the wrong transactions for it.
 
     // Size limits
-    unsigned int nMaxSize = consensusParams.MaxBlockSize(block.GetBlockTime());
-    if (block.vtx.empty() || block.vtx.size() > nMaxSize || ::GetSerializeSize(block, PROTOCOL_VERSION) > nMaxSize)
+    if (block.vtx.empty() || block.vtx.size() > MAX_BLOCK_SIZE || ::GetSerializeSize(block, PROTOCOL_VERSION) > MAX_BLOCK_SIZE)
         return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-blk-length", "size limits failed");
 
     // First transaction must be coinbase, the rest must not be
@@ -3129,7 +3135,7 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
     {
         nSigOps += GetSigOpCountWithoutP2SH(*tx);
     }
-    if (nSigOps > consensusParams.MaxBlockSigOps(block.GetBlockTime()))
+    if (nSigOps > MAX_BLOCK_SIGOPS)
         return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-blk-sigops", "out-of-bounds SigOpCount");
 
     if (fCheckPOW && fCheckMerkleRoot)
@@ -4329,8 +4335,7 @@ bool LoadExternalBlockFile(const CChainParams& chainparams, FILE* fileIn, FlatFi
     int nLoaded = 0;
     try {
         // This takes over fileIn and calls fclose() on it in the CBufferedFile destructor
-        unsigned int nAbsoluteMaxBlockSize = chainparams.GetConsensus().MaxBlockSize(std::numeric_limits<uint64_t>::max());
-        CBufferedFile blkdat(fileIn, 2*nAbsoluteMaxBlockSize, nAbsoluteMaxBlockSize+8, SER_DISK, CLIENT_VERSION);
+        CBufferedFile blkdat(fileIn, 2*MAX_BLOCK_SIZE, MAX_BLOCK_SIZE+8, SER_DISK, CLIENT_VERSION);
         uint64_t nRewind = blkdat.GetPos();
         while (!blkdat.eof()) {
             boost::this_thread::interruption_point();
@@ -4349,7 +4354,7 @@ bool LoadExternalBlockFile(const CChainParams& chainparams, FILE* fileIn, FlatFi
                     continue;
                 // read size
                 blkdat >> nSize;
-                if (nSize < 80 || nSize > nAbsoluteMaxBlockSize)
+                if (nSize < 80 || nSize > MAX_BLOCK_SIZE)
                     continue;
             } catch (const std::exception&) {
                 // no valid block header found; don't complain

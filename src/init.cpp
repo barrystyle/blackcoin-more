@@ -86,6 +86,10 @@
 #include <zmq/zmqrpc.h>
 #endif
 
+#ifdef USE_SSE2
+#include <crypto/scrypt.h>
+#endif
+
 static const bool DEFAULT_PROXYRANDOMIZE = true;
 static const bool DEFAULT_REST_ENABLE = false;
 static const bool DEFAULT_STOPAFTERBLOCKIMPORT = false;
@@ -183,7 +187,7 @@ void Shutdown(NodeContext& node)
     /// for example if the data directory was found to be locked.
     /// Be sure that anything that writes files or flushes caches only does this if the respective
     /// module was initialized.
-    util::ThreadRename("shutoff");
+    util::ThreadRename("blackmore-shutoff");
     mempool.AddTransactionsUpdated(1);
 
     StopHTTPRPC();
@@ -679,7 +683,7 @@ static void CleanupBlockRevFiles()
 static void ThreadImport(std::vector<fs::path> vImportFiles)
 {
     const CChainParams& chainparams = Params();
-    util::ThreadRename("loadblk");
+    util::ThreadRename("blackmore-loadblk");
     ScheduleBatchPriority();
 
     {
@@ -1457,6 +1461,14 @@ bool AppInitMain(NodeContext& node)
     } else {
         LogPrintf("Using /16 prefix for IP bucketing\n");
     }
+
+#ifdef ENABLE_WALLET
+    nDonationPercentage = gArgs.GetArg("-donatetodevfund", DEFAULT_DONATION_PERCENTAGE);
+    if (nDonationPercentage < 0)
+        nDonationPercentage = 0;
+    else if (nDonationPercentage > 95)
+        nDonationPercentage = 95;
+#endif
 
 #if ENABLE_ZMQ
     g_zmq_notification_interface = CZMQNotificationInterface::Create();

@@ -164,6 +164,7 @@ void CZMQNotificationInterface::TransactionAddedToMempool(const CTransactionRef&
 
     for (std::list<CZMQAbstractNotifier*>::iterator i = notifiers.begin(); i!=notifiers.end(); )
     {
+
         CZMQAbstractNotifier *notifier = *i;
         if (notifier->NotifyTransaction(tx))
         {
@@ -171,6 +172,7 @@ void CZMQNotificationInterface::TransactionAddedToMempool(const CTransactionRef&
         }
         else
         {
+
             notifier->Shutdown();
             i = notifiers.erase(i);
         }

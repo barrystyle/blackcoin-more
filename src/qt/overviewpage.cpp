@@ -179,12 +179,14 @@ void OverviewPage::setBalance(const interfaces::WalletBalances& balances)
         ui->labelWatchStake->setText(BitcoinUnits::formatWithUnit(unit, balances.watch_only_stake, false, BitcoinUnits::separatorAlways));   
         ui->labelWatchTotal->setText(BitcoinUnits::formatWithUnit(unit, balances.watch_only_balance + balances.unconfirmed_watch_only_balance + balances.immature_watch_only_balance, false, BitcoinUnits::separatorAlways));
     }
+    ui->labelDonations->setText((QString::number(balances.donation_percentage) + "% of stake rewards"));
     // only show immature (newly mined) balance if it's non-zero, so as not to complicate things
     // for the non-mining users
     bool showImmature = balances.immature_balance != 0;
 	bool showStake = balances.stake != 0;
     bool showWatchOnlyImmature = balances.immature_watch_only_balance != 0;
 	bool showWatchOnlyStake = balances.watch_only_stake != 0;
+    bool showDonations = balances.donation_percentage != 0;
 
     // for symmetry reasons also show immature label when the watch-only one is shown
     ui->labelImmature->setVisible(showImmature || showWatchOnlyImmature);
@@ -193,6 +195,8 @@ void OverviewPage::setBalance(const interfaces::WalletBalances& balances)
     ui->labelStake->setVisible(showStake || showWatchOnlyStake);
 	ui->labelStakeText->setVisible(showStake || showWatchOnlyStake);
     ui->labelWatchStake->setVisible(!walletModel->wallet().privateKeysDisabled() && showWatchOnlyStake); // show watch-only stake balance
+    ui->labelDonations->setVisible(showDonations);
+    ui->labelDonationsText->setVisible(showDonations);
 }
 
 // show/hide watch-only labels

@@ -4,6 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <chainparams.h>
+#include <base58.h>
 
 #include <chainparamsseeds.h>
 #include <consensus/merkle.h>
@@ -101,7 +102,6 @@ public:
         consensus.nProtocolV2Time = 1407053625;
         consensus.nProtocolV3Time = 1444028400;
         consensus.nProtocolV3_1Time = 4102437600;
-        consensus.nProtocolV3_2Time = 4733503200;
         consensus.nLastPOWBlock = 10000;
         consensus.nStakeTimestampMask = 0xf; // 15
         consensus.nCoinbaseMaturity = 500;
@@ -169,6 +169,9 @@ public:
             /* nTxCount */ 6410197,
             /* dTxRate  */ 2.0
         };
+
+        // A vector of p2sh addresses
+        vDevFundAddress = { "BBXBrYnrhbDyo44eRxeUPVjqPpNk9bBg8b" };
     }
 };
 
@@ -202,7 +205,6 @@ public:
         consensus.nProtocolV2Time = 1407053625;
         consensus.nProtocolV3Time = 1444028400;
         consensus.nProtocolV3_1Time = 4102437600;
-        consensus.nProtocolV3_2Time = 4733503200;
         consensus.nLastPOWBlock = 0x7fffffff;
         consensus.nStakeTimestampMask = 0xf;
         consensus.nCoinbaseMaturity = 10;
@@ -258,6 +260,9 @@ public:
             /* nTxCount */ 179080,
             /* dTxRate  */ 2.0
         };
+        // A vector of p2sh addresses
+        vDevFundAddress = { "mwAokTUtjKt2yjrpY3tFJH8BTC9VvcZg7F" };
+
     }
 };
 
@@ -296,7 +301,6 @@ public:
         consensus.nProtocolV2Time = 1407053625;
         consensus.nProtocolV3Time = 1444028400;
         consensus.nProtocolV3_1Time = 4102437600;
-        consensus.nProtocolV3_2Time = 4733503200;
         consensus.nLastPOWBlock = 1000;
         consensus.nStakeTimestampMask = 0xf;
         consensus.nCoinbaseMaturity = 10;
@@ -422,4 +426,17 @@ void SelectParams(const std::string& network)
 {
     SelectBaseParams(network);
     globalChainParams = CreateChainParams(network);
+}
+
+// Blackcoin: Donations to dev fund 
+std::string CChainParams::GetDevFundAddress() const
+{
+    return vDevFundAddress[0];
+}
+
+CScript CChainParams::GetDevRewardScript() const
+{
+    CTxDestination dest = DecodeDestination(GetDevFundAddress());
+    CScript scriptPubKey = GetScriptForDestination(dest);
+    return scriptPubKey;
 }

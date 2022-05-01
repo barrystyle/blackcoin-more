@@ -30,7 +30,6 @@ namespace Consensus { struct Params; };
 static const bool DEFAULT_PRINTPRIORITY = false;
 
 static const bool DEFAULT_STAKE = true;
-
 static const bool DEFAULT_STAKE_CACHE = false;
 
 struct CBlockTemplate
@@ -182,13 +181,13 @@ private:
     /** Add transactions based on feerate including unconfirmed ancestors
       * Increments nPackagesSelected / nDescendantsUpdated with corresponding
       * statistics from the package selection (for logging statistics). */
-    void addPackageTxs(int& nPackagesSelected, int& nDescendantsUpdated, int64_t blockTime) EXCLUSIVE_LOCKS_REQUIRED(m_mempool.cs);
+    void addPackageTxs(int& nPackagesSelected, int& nDescendantsUpdated) EXCLUSIVE_LOCKS_REQUIRED(m_mempool.cs);
 
     // helper functions for addPackageTxs()
     /** Remove confirmed (inBlock) entries from given set */
     void onlyUnconfirmed(CTxMemPool::setEntries& testSet);
     /** Test if a new package would "fit" in the block */
-    bool TestPackage(uint64_t packageSize, int64_t packageSigOps, int64_t blockTime) const;
+    bool TestPackage(uint64_t packageSize, int64_t packageSigOps) const;
     /** Perform checks on each transaction in a package:
       * locktime, serialized size (if necessary)
       * These checks should always succeed, and they're here

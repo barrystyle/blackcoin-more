@@ -63,6 +63,11 @@ void WalletModel::startPollBalance()
     timer->start(MODEL_UPDATE_DELAY);
 }
 
+unsigned int WalletModel::getDonationPercentage() const
+{
+    return wallet->GetDonationPercentage();
+}
+
 void WalletModel::updateStatus()
 {
     EncryptionStatus newEncryptionStatus = getEncryptionStatus();

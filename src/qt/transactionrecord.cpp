@@ -43,6 +43,14 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const interface
         //
         // Credit
         //
+        CAmount nReward = -nDebit;
+        if (wtx.is_coinstake)
+        {
+            for (unsigned int j = 0; j < wtx.tx->vout.size(); j++)
+                if (wtx.tx->vout[j].scriptPubKey == wtx.tx->vout[1].scriptPubKey)
+                    nReward += wtx.tx->vout[j].nValue;
+        }
+
         for(unsigned int i = 0; i < wtx.tx->vout.size(); i++)
         {
             const CTxOut& txout = wtx.tx->vout[i];
@@ -82,8 +90,10 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const interface
 
                 parts.append(sub);
 				
-                if (wtx.is_coinstake)
+                if (wtx.is_coinstake) {
+                    sub.credit = nReward;
                     break; // Single output for coinstake
+                }
             }
         }
     }

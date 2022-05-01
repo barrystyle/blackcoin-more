@@ -87,6 +87,7 @@ constexpr CAmount HIGH_MAX_TX_FEE{100 * HIGH_TX_FEE_PER_KB};
 static constexpr size_t DUMMY_P2PKH_INPUT_SIZE = 148;
 
 static const CAmount DEFAULT_RESERVE_BALANCE = 0;
+static const unsigned int DEFAULT_DONATION_PERCENTAGE = 10;
 
 class CCoinControl;
 class COutput;
@@ -930,6 +931,7 @@ public:
         CAmount m_watchonly_untrusted_pending{0};
         CAmount m_watchonly_immature{0};
         CAmount m_watchonly_stake{0};
+        unsigned int m_donation_percentage{0};
     };
     Balance GetBalance(int min_depth = 0, bool avoid_reuse = true) const;
     CAmount GetAvailableBalance(const CCoinControl* coinControl = nullptr) const;

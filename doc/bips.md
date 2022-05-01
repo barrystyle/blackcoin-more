@@ -44,10 +44,7 @@ BIPs that are implemented by Bitcoin Core (up-to-date up to **v0.20.2**):
 * [`BIP 176`](https://github.com/bitcoin/bips/blob/master/bip-0176.mediawiki): Bits Denomination [QT only] is supported as of **v0.16.0** ([PR 12035](https://github.com/bitcoin/bitcoin/pull/12035)).
 * [`BIP 350`](https://github.com/bitcoin/bips/blob/master/bip-0350.mediawiki): Addresses for native v1+ segregated Witness outputs use Bech32m instead of Bech32 as of **v0.20.2** ([PR 20861](https://github.com/bitcoin/bitcoin/pull/20861)).
 
-BIPs disabled in Blackcoin More (up-to-date up to **v2.20.2.0**):
-* [`BIP 68`](https://github.com/bitcoin/bips/blob/master/bip-0068.mediawiki)
-* [`BIP 112`](https://github.com/bitcoin/bips/blob/master/bip-0112.mediawiki)
-* [`BIP 113`](https://github.com/bitcoin/bips/blob/master/bip-0113.mediawiki)
+BIPs disabled in Blackcoin More (up-to-date up to **v20.2.0**):
 * [`BIP 125`](https://github.com/bitcoin/bips/blob/master/bip-0125.mediawiki)
 * [`BIP 141`](https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki)
 * [`BIP 143`](https://github.com/bitcoin/bips/blob/master/bip-0143.mediawiki)
