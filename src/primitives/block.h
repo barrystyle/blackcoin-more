@@ -61,7 +61,6 @@ public:
 };
 
 
-
 class CBlock : public CBlockHeader
 {
 public:

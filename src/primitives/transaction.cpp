@@ -4,7 +4,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <primitives/transaction.h>
-#include <script/interpreter.h>
+
 #include <hash.h>
 #include <tinyformat.h>
 #include <util/strencodings.h>
@@ -113,6 +113,8 @@ std::string CTransaction::ToString() const
         nLockTime);
     for (const auto& tx_in : vin)
         str += "    " + tx_in.ToString() + "\n";
+    for (const auto& tx_in : vin)
+        str += "    " + tx_in.scriptWitness.ToString() + "\n";
     for (const auto& tx_out : vout)
         str += "    " + tx_out.ToString() + "\n";
     return str;
