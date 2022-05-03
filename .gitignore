@@ -5,10 +5,12 @@
 src/blackmore
 src/blackmored
 src/blackmore-cli
+src/blackmore-gui
+src/blackmore-node
 src/blackmore-tx
+src/blackmore-util
 src/blackmore-wallet
-src/test/fuzz
-!src/test/fuzz/*.*
+src/test/fuzz/fuzz
 src/test/test_blackmore
 src/qt/test/test_blackmore-qt
 
@@ -59,7 +61,7 @@ src/qt/blackmore-qt.includes
 .dirstamp
 .libs
 .*.swp
-*.*~*
+*~
 *.bak
 *.rej
 *.orig
@@ -74,6 +76,7 @@ src/qt/blackmore-qt.includes
 *.log
 *.trs
 *.dmg
+*.iso
 
 *.json.h
 *.raw.h
@@ -118,7 +121,10 @@ releases
 /*.info
 test_bitcoin.coverage/
 total.coverage/
+fuzz.coverage/
 coverage_percent.txt
+/cov_tool_wrapper.sh
+qa-assets/
 
 #build tests
 linux-coverage-build
@@ -126,6 +132,7 @@ linux-build
 win32-build
 test/config.ini
 test/cache/*
+test/.mypy_cache/
 
 !src/leveldb*/Makefile
 
@@ -146,6 +153,8 @@ db6/
 osx_volname
 dist/
 *.background.tiff
+
+/guix-build-*
 
 # Visual Studio
 .vscode/*

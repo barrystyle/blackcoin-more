@@ -5,5 +5,7 @@ clean: FORCE
 	$(MAKE) -C .. blackmore_qt_clean test_blackmore_qt_clean
 check: FORCE
 	$(MAKE) -C .. test_blackmore_qt_check
-blackmore-qt blackmore-qt.exe: FORCE
+bitcoin-qt bitcoin-qt.exe: FORCE
 	 $(MAKE) -C .. blackmore_qt
+apk: FORCE
+	$(MAKE) -C .. blackmore_qt_apk

@@ -1,5 +1,5 @@
 // Copyright (c) 2010 Satoshi Nakamoto
-// Copyright (c) 2009-2019 The Bitcoin Core developers
+// Copyright (c) 2009-2020 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -17,19 +17,24 @@
 #include <tinyformat.h>
 #include <univalue.h>
 #include <util/strencodings.h>
-#include <util/system.h>
 
-CMutableTransaction ConstructTransaction(const UniValue& inputs_in, const UniValue& outputs_in, const UniValue& locktime)
+CMutableTransaction ConstructTransaction(const UniValue& inputs_in, const UniValue& outputs_in, const UniValue& locktime, bool rbf)
 {
-    if (inputs_in.isNull() || outputs_in.isNull())
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, arguments 1 and 2 must be non-null");
+    if (outputs_in.isNull()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, output argument must be non-null");
+    }
 
-    UniValue inputs = inputs_in.get_array();
+    UniValue inputs;
+    if (inputs_in.isNull()) {
+        inputs = UniValue::VARR;
+    } else {
+        inputs = inputs_in.get_array();
+    }
+
     const bool outputs_is_obj = outputs_in.isObject();
     UniValue outputs = outputs_is_obj ? outputs_in.get_obj() : outputs_in.get_array();
 
     CMutableTransaction rawTx;
-	rawTx.nVersion = gArgs.GetArg("-txversion", CTransaction::CURRENT_VERSION);
 
     if (!locktime.isNull()) {
         int64_t nLockTime = locktime.get_int64();
@@ -49,7 +54,7 @@ CMutableTransaction ConstructTransaction(const UniValue& inputs_in, const UniVal
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, missing vout key");
         int nOutput = vout_v.get_int();
         if (nOutput < 0)
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, vout must be positive");
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, vout cannot be negative");
 
         uint32_t nSequence;
         if (rawTx.nLockTime) {
@@ -131,7 +136,12 @@ static void TxInErrorToJSON(const CTxIn& txin, UniValue& vErrorsRet, const std::
     UniValue entry(UniValue::VOBJ);
     entry.pushKV("txid", txin.prevout.hash.ToString());
     entry.pushKV("vout", (uint64_t)txin.prevout.n);
-    entry.pushKV("scriptSig", HexStr(txin.scriptSig.begin(), txin.scriptSig.end()));
+    UniValue witness(UniValue::VARR);
+    for (unsigned int i = 0; i < txin.scriptWitness.stack.size(); i++) {
+        witness.push_back(HexStr(txin.scriptWitness.stack[i]));
+    }
+    entry.pushKV("witness", witness);
+    entry.pushKV("scriptSig", HexStr(txin.scriptSig));
     entry.pushKV("sequence", (uint64_t)txin.nSequence);
     entry.pushKV("error", strMessage);
     vErrorsRet.push_back(entry);
@@ -160,7 +170,7 @@ void ParsePrevouts(const UniValue& prevTxsUnival, FillableSigningProvider* keyst
 
             int nOut = find_value(prevOut, "vout").get_int();
             if (nOut < 0) {
-                throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "vout must be positive");
+                throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "vout cannot be negative");
             }
 
             COutPoint out(txid, nOut);
@@ -186,18 +196,72 @@ void ParsePrevouts(const UniValue& prevTxsUnival, FillableSigningProvider* keyst
             }
 
             // if redeemScript and private keys were given, add redeemScript to the keystore so it can be signed
-            if (keystore && scriptPubKey.IsPayToScriptHash()) {
+            const bool is_p2sh = scriptPubKey.IsPayToScriptHash();
+            const bool is_p2wsh = scriptPubKey.IsPayToWitnessScriptHash();
+            if (keystore && (is_p2sh || is_p2wsh)) {
                 RPCTypeCheckObj(prevOut,
                     {
                         {"redeemScript", UniValueType(UniValue::VSTR)},
+                        {"witnessScript", UniValueType(UniValue::VSTR)},
                     }, true);
                 UniValue rs = find_value(prevOut, "redeemScript");
-                if (rs.isNull()) {
-                    throw JSONRPCError(RPC_INVALID_PARAMETER, "Missing redeemScript");
-                } else if (!rs.isNull()) {
-                    std::vector<unsigned char> redeemScriptData(ParseHexV(rs, "redeemScript"));
-                    CScript redeemScript(redeemScriptData.begin(), redeemScriptData.end());
-                    keystore->AddCScript(redeemScript);
+                UniValue ws = find_value(prevOut, "witnessScript");
+                if (rs.isNull() && ws.isNull()) {
+                    throw JSONRPCError(RPC_INVALID_PARAMETER, "Missing redeemScript/witnessScript");
+                }
+
+                // work from witnessScript when possible
+                std::vector<unsigned char> scriptData(!ws.isNull() ? ParseHexV(ws, "witnessScript") : ParseHexV(rs, "redeemScript"));
+                CScript script(scriptData.begin(), scriptData.end());
+                keystore->AddCScript(script);
+                // Automatically also add the P2WSH wrapped version of the script (to deal with P2SH-P2WSH).
+                // This is done for redeemScript only for compatibility, it is encouraged to use the explicit witnessScript field instead.
+                CScript witness_output_script{GetScriptForDestination(WitnessV0ScriptHash(script))};
+                keystore->AddCScript(witness_output_script);
+
+                if (!ws.isNull() && !rs.isNull()) {
+                    // if both witnessScript and redeemScript are provided,
+                    // they should either be the same (for backwards compat),
+                    // or the redeemScript should be the encoded form of
+                    // the witnessScript (ie, for p2sh-p2wsh)
+                    if (ws.get_str() != rs.get_str()) {
+                        std::vector<unsigned char> redeemScriptData(ParseHexV(rs, "redeemScript"));
+                        CScript redeemScript(redeemScriptData.begin(), redeemScriptData.end());
+                        if (redeemScript != witness_output_script) {
+                            throw JSONRPCError(RPC_INVALID_PARAMETER, "redeemScript does not correspond to witnessScript");
+                        }
+                    }
+                }
+
+                if (is_p2sh) {
+                    const CTxDestination p2sh{ScriptHash(script)};
+                    const CTxDestination p2sh_p2wsh{ScriptHash(witness_output_script)};
+                    if (scriptPubKey == GetScriptForDestination(p2sh)) {
+                        // traditional p2sh; arguably an error if
+                        // we got here with rs.IsNull(), because
+                        // that means the p2sh script was specified
+                        // via witnessScript param, but for now
+                        // we'll just quietly accept it
+                    } else if (scriptPubKey == GetScriptForDestination(p2sh_p2wsh)) {
+                        // p2wsh encoded as p2sh; ideally the witness
+                        // script was specified in the witnessScript
+                        // param, but also support specifying it via
+                        // redeemScript param for backwards compat
+                        // (in which case ws.IsNull() == true)
+                    } else {
+                        // otherwise, can't generate scriptPubKey from
+                        // either script, so we got unusable parameters
+                        throw JSONRPCError(RPC_INVALID_PARAMETER, "redeemScript/witnessScript does not match scriptPubKey");
+                    }
+                } else if (is_p2wsh) {
+                    // plain p2wsh; could throw an error if script
+                    // was specified by redeemScript rather than
+                    // witnessScript (ie, ws.IsNull() == true), but
+                    // accept it for backwards compat
+                    const CTxDestination p2wsh{WitnessV0ScriptHash(script)};
+                    if (scriptPubKey != GetScriptForDestination(p2wsh)) {
+                        throw JSONRPCError(RPC_INVALID_PARAMETER, "redeemScript/witnessScript does not match scriptPubKey");
+                    }
                 }
             }
         }
@@ -215,7 +279,7 @@ void SignTransaction(CMutableTransaction& mtx, const SigningProvider* keystore, 
     SignTransactionResultToJSON(mtx, complete, coins, input_errors, result);
 }
 
-void SignTransactionResultToJSON(CMutableTransaction& mtx, bool complete, const std::map<COutPoint, Coin>& coins, std::map<int, std::string>& input_errors, UniValue& result)
+void SignTransactionResultToJSON(CMutableTransaction& mtx, bool complete, const std::map<COutPoint, Coin>& coins, const std::map<int, std::string>& input_errors, UniValue& result)
 {
     // Make errors UniValue
     UniValue vErrors(UniValue::VARR);

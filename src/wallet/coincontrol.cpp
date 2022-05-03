@@ -6,18 +6,7 @@
 
 #include <util/system.h>
 
-void CCoinControl::SetNull()
+CCoinControl::CCoinControl()
 {
-    destChange = CNoDestination();
-    m_change_type.reset();
-    fAllowOtherInputs = false;
-    fAllowWatchOnly = false;
     m_avoid_partial_spends = gArgs.GetBoolArg("-avoidpartialspends", DEFAULT_AVOIDPARTIALSPENDS);
-    m_avoid_address_reuse = false;
-    setSelected.clear();
-    m_feerate.reset();
-    fOverrideFeeRate = false;
-    m_min_depth = DEFAULT_MIN_DEPTH;
-    m_max_depth = DEFAULT_MAX_DEPTH;
 }
-

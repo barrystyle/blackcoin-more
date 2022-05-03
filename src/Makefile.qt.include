@@ -3,6 +3,11 @@
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 bin_PROGRAMS += qt/blackmore-qt
+
+if BUILD_BITCOIN_GUI
+  bin_PROGRAMS += blackmore-gui
+endif
+
 EXTRA_LIBRARIES += qt/libbitcoinqt.a
 
 # bitcoin qt core #
@@ -20,6 +25,7 @@ QT_FORMS_UI = \
   qt/forms/openuridialog.ui \
   qt/forms/optionsdialog.ui \
   qt/forms/overviewpage.ui \
+  qt/forms/psbtoperationsdialog.ui \
   qt/forms/receivecoinsdialog.ui \
   qt/forms/receiverequestdialog.ui \
   qt/forms/debugwindow.ui \
@@ -55,7 +61,9 @@ QT_MOC_CPP = \
   qt/moc_optionsmodel.cpp \
   qt/moc_overviewpage.cpp \
   qt/moc_peertablemodel.cpp \
+  qt/moc_peertablesortproxy.cpp \
   qt/moc_paymentserver.cpp \
+  qt/moc_psbtoperationsdialog.cpp \
   qt/moc_qrimagewidget.cpp \
   qt/moc_qvalidatedlineedit.cpp \
   qt/moc_qvaluecombobox.cpp \
@@ -71,6 +79,7 @@ QT_MOC_CPP = \
   qt/moc_transactiondesc.cpp \
   qt/moc_transactiondescdialog.cpp \
   qt/moc_transactionfilterproxy.cpp \
+  qt/moc_transactionoverviewwidget.cpp \
   qt/moc_transactiontablemodel.cpp \
   qt/moc_transactionview.cpp \
   qt/moc_utilitydialog.cpp \
@@ -126,7 +135,9 @@ BITCOIN_QT_H = \
   qt/overviewpage.h \
   qt/paymentserver.h \
   qt/peertablemodel.h \
+  qt/peertablesortproxy.h \
   qt/platformstyle.h \
+  qt/psbtoperationsdialog.h \
   qt/qrimagewidget.h \
   qt/qvalidatedlineedit.h \
   qt/qvaluecombobox.h \
@@ -143,6 +154,7 @@ BITCOIN_QT_H = \
   qt/transactiondesc.h \
   qt/transactiondescdialog.h \
   qt/transactionfilterproxy.h \
+  qt/transactionoverviewwidget.h \
   qt/transactionrecord.h \
   qt/transactiontablemodel.h \
   qt/transactionview.h \
@@ -153,6 +165,9 @@ BITCOIN_QT_H = \
   qt/walletmodeltransaction.h \
   qt/walletview.h \
   qt/winshutdownmonitor.h
+
+RES_FONTS = \
+  qt/res/fonts/RobotoMono-Bold.ttf
 
 RES_ICONS = \
   qt/res/icons/add.png \
@@ -221,6 +236,7 @@ BITCOIN_QT_BASE_CPP = \
   qt/optionsdialog.cpp \
   qt/optionsmodel.cpp \
   qt/peertablemodel.cpp \
+  qt/peertablesortproxy.cpp \
   qt/platformstyle.cpp \
   qt/qvalidatedlineedit.cpp \
   qt/qvaluecombobox.cpp \
@@ -242,6 +258,7 @@ BITCOIN_QT_WALLET_CPP = \
   qt/openuridialog.cpp \
   qt/overviewpage.cpp \
   qt/paymentserver.cpp \
+  qt/psbtoperationsdialog.cpp \
   qt/qrimagewidget.cpp \
   qt/receivecoinsdialog.cpp \
   qt/receiverequestdialog.cpp \
@@ -269,13 +286,11 @@ if ENABLE_WALLET
 BITCOIN_QT_CPP += $(BITCOIN_QT_WALLET_CPP)
 endif # ENABLE_WALLET
 
-RES_IMAGES =
-
-RES_MOVIES = $(wildcard $(srcdir)/qt/res/movies/spinner-*.png)
+RES_ANIMATION = $(wildcard $(srcdir)/qt/res/animation/spinner-*.png)
 
 BITCOIN_RC = qt/res/bitcoin-qt-res.rc
 
-BITCOIN_QT_INCLUDES = -DQT_NO_KEYWORDS
+BITCOIN_QT_INCLUDES = -DQT_NO_KEYWORDS -DQT_USE_QSTRINGBUILDER
 
 qt_libbitcoinqt_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(BITCOIN_QT_INCLUDES) \
   $(QT_INCLUDES) $(QT_DBUS_INCLUDES) $(QR_CFLAGS)
@@ -283,7 +298,7 @@ qt_libbitcoinqt_a_CXXFLAGS = $(AM_CXXFLAGS) $(QT_PIE_FLAGS)
 qt_libbitcoinqt_a_OBJCXXFLAGS = $(AM_OBJCXXFLAGS) $(QT_PIE_FLAGS)
 
 qt_libbitcoinqt_a_SOURCES = $(BITCOIN_QT_CPP) $(BITCOIN_QT_H) $(QT_FORMS_UI) \
-  $(QT_QRC) $(QT_QRC_LOCALE) $(QT_TS) $(RES_ICONS) $(RES_IMAGES) $(RES_MOVIES)
+  $(QT_QRC) $(QT_QRC_LOCALE) $(QT_TS) $(RES_FONTS) $(RES_ICONS) $(RES_ANIMATION)
 if TARGET_DARWIN
   qt_libbitcoinqt_a_SOURCES += $(BITCOIN_MM)
 endif
@@ -296,30 +311,44 @@ QT_FORMS_H=$(join $(dir $(QT_FORMS_UI)),$(addprefix ui_, $(notdir $(QT_FORMS_UI:
 # Most files will depend on the forms and moc files as includes. Generate them
 # before anything else.
 $(QT_MOC): $(QT_FORMS_H)
-$(qt_libbitcoinqt_a_OBJECTS) $(qt_blackmore_qt_OBJECTS) : | $(QT_MOC)
+$(qt_libbitcoinqt_a_OBJECTS) $(qt_blackmore_qt_OBJECTS) $(bitcoin_gui_OBJECTS) : | $(QT_MOC)
 
-# blackmore-qt binary #
-qt_blackmore_qt_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(BITCOIN_QT_INCLUDES) \
+# blackmore-qt and blackmore-gui binaries #
+bitcoin_qt_cppflags = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(BITCOIN_QT_INCLUDES) \
   $(QT_INCLUDES) $(QR_CFLAGS)
-qt_blackmore_qt_CXXFLAGS = $(AM_CXXFLAGS) $(QT_PIE_FLAGS)
+bitcoin_qt_cxxflags = $(AM_CXXFLAGS) $(QT_PIE_FLAGS)
 
-qt_blackmore_qt_SOURCES = qt/main.cpp
+bitcoin_qt_sources = qt/main.cpp
 if TARGET_WINDOWS
-  qt_blackmore_qt_SOURCES += $(BITCOIN_RC)
+  bitcoin_qt_sources += $(BITCOIN_RC)
 endif
-qt_blackmore_qt_LDADD = qt/libbitcoinqt.a $(LIBBITCOIN_SERVER)
+bitcoin_qt_ldadd = qt/libbitcoinqt.a $(LIBBITCOIN_SERVER)
 if ENABLE_WALLET
-qt_blackmore_qt_LDADD += $(LIBBITCOIN_UTIL) $(LIBBITCOIN_WALLET)
+bitcoin_qt_ldadd += $(LIBBITCOIN_UTIL) $(LIBBITCOIN_WALLET)
 endif
 if ENABLE_ZMQ
-qt_blackmore_qt_LDADD += $(LIBBITCOIN_ZMQ) $(ZMQ_LIBS)
+bitcoin_qt_ldadd += $(LIBBITCOIN_ZMQ) $(ZMQ_LIBS)
 endif
-qt_blackmore_qt_LDADD += $(LIBBITCOIN_CLI) $(LIBBITCOIN_COMMON) $(LIBBITCOIN_UTIL) $(LIBBITCOIN_CONSENSUS) $(LIBBITCOIN_CRYPTO) $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBLEVELDB_SSE42) $(LIBMEMENV) \
-  $(BOOST_LIBS) $(QT_LIBS) $(QT_DBUS_LIBS) $(QR_LIBS) $(BDB_LIBS) $(MINIUPNPC_LIBS) $(LIBSECP256K1) \
-  $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS)
-qt_blackmore_qt_LDADD += $(CRYPTO_LIBS)
-qt_blackmore_qt_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(QT_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
-qt_blackmore_qt_LIBTOOLFLAGS = $(AM_LIBTOOLFLAGS) --tag CXX
+bitcoin_qt_ldadd += $(LIBBITCOIN_CLI) $(LIBBITCOIN_COMMON) $(LIBBITCOIN_UTIL) $(LIBBITCOIN_CONSENSUS) $(LIBBITCOIN_CRYPTO) $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBLEVELDB_SSE42) $(LIBMEMENV) \
+  $(BOOST_LIBS) $(QT_LIBS) $(QT_DBUS_LIBS) $(QR_LIBS) $(BDB_LIBS) $(MINIUPNPC_LIBS) $(NATPMP_LIBS) $(LIBSECP256K1) \
+  $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(SQLITE_LIBS)
+bitcoin_qt_ldadd += $(CRYPTO_LIBS)
+bitcoin_qt_ldflags = $(RELDFLAGS) $(AM_LDFLAGS) $(QT_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) $(PTHREAD_FLAGS)
+bitcoin_qt_libtoolflags = $(AM_LIBTOOLFLAGS) --tag CXX
+
+qt_blackmore_qt_CPPFLAGS = $(bitcoin_qt_cppflags)
+qt_blackmore_qt_CXXFLAGS = $(bitcoin_qt_cxxflags)
+qt_blackmore_qt_SOURCES = $(bitcoin_qt_sources)
+qt_blackmore_qt_LDADD = $(bitcoin_qt_ldadd)
+qt_blackmore_qt_LDFLAGS = $(bitcoin_qt_ldflags)
+qt_blackmore_qt_LIBTOOLFLAGS = $(bitcoin_qt_libtoolflags)
+
+bitcoin_gui_CPPFLAGS = $(bitcoin_qt_cppflags)
+bitcoin_gui_CXXFLAGS = $(bitcoin_qt_cxxflags)
+bitcoin_gui_SOURCES = $(bitcoin_qt_sources)
+bitcoin_gui_LDADD = $(bitcoin_qt_ldadd)
+bitcoin_gui_LDFLAGS = $(bitcoin_qt_ldflags)
+bitcoin_gui_LIBTOOLFLAGS = $(bitcoin_qt_libtoolflags)
 
 #locale/foo.ts -> locale/foo.qm
 QT_QM=$(QT_TS:.ts=.qm)
@@ -342,7 +371,7 @@ $(QT_QRC_LOCALE_CPP): $(QT_QRC_LOCALE) $(QT_QM)
 	$(AM_V_GEN) QT_SELECT=$(QT_SELECT) $(RCC) -name bitcoin_locale --format-version 1 $(@D)/temp_$(<F) > $@
 	@rm $(@D)/temp_$(<F)
 
-$(QT_QRC_CPP): $(QT_QRC) $(QT_FORMS_H) $(RES_ICONS) $(RES_IMAGES) $(RES_MOVIES)
+$(QT_QRC_CPP): $(QT_QRC) $(QT_FORMS_H) $(RES_FONTS) $(RES_ICONS) $(RES_ANIMATION)
 	@test -f $(RCC)
 	$(AM_V_GEN) QT_SELECT=$(QT_SELECT) $(RCC) -name bitcoin --format-version 1 $< > $@
 
@@ -354,6 +383,21 @@ bitcoin_qt_clean: FORCE
 	rm -f $(CLEAN_QT) $(qt_libbitcoinqt_a_OBJECTS) $(qt_blackmore_qt_OBJECTS) qt/blackmore-qt$(EXEEXT) $(LIBBITCOINQT)
 
 bitcoin_qt : qt/blackmore-qt$(EXEEXT)
+
+APK_LIB_DIR = qt/android/libs/$(ANDROID_ARCH)
+QT_BASE_VERSION = $(lastword $(shell $(MOC) --version))
+QT_BASE_PATH = $(shell find ../depends/sources/ -maxdepth 1 -type f -regex ".*qtbase.*$(QT_BASE_VERSION)\.tar.xz")
+QT_BASE_TLD = $(shell tar tf $(QT_BASE_PATH) --exclude='*/*')
+
+bitcoin_qt_apk: FORCE
+	mkdir -p $(APK_LIB_DIR)
+	cp $(dir $(CC))../sysroot/usr/lib/$(host_alias)/libc++_shared.so $(APK_LIB_DIR)
+	tar xf $(QT_BASE_PATH) -C qt/android/src/ $(QT_BASE_TLD)src/android/jar/src --strip-components=5
+	tar xf $(QT_BASE_PATH) -C qt/android/src/ $(QT_BASE_TLD)src/android/java/src --strip-components=5
+	tar xf $(QT_BASE_PATH) -C qt/android/res/ $(QT_BASE_TLD)src/android/java/res --strip-components=5
+	cp qt/bitcoin-qt $(APK_LIB_DIR)/libbitcoin-qt.so
+	cd qt/android && gradle wrapper --gradle-version=6.6.1
+	cd qt/android && ./gradlew build
 
 ui_%.h: %.ui
 	@test -f $(UIC)

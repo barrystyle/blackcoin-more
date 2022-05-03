@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2018-2019 The Bitcoin Core developers
+# Copyright (c) 2018-2020 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Test the scantxoutset rpc call."""
@@ -25,6 +25,8 @@ class ScantxoutsetTest(BitcoinTestFramework):
         self.log.info("Mining blocks...")
         self.nodes[0].generate(110)
 
+        addr_P2SH_SEGWIT = self.nodes[0].getnewaddress("", "p2sh-segwit")
+        pubk1 = self.nodes[0].getaddressinfo(addr_P2SH_SEGWIT)['pubkey']
         addr_LEGACY = self.nodes[0].getnewaddress("", "legacy")
         pubk2 = self.nodes[0].getaddressinfo(addr_LEGACY)['pubkey']
         addr_BECH32 = self.nodes[0].getnewaddress("", "bech32")
@@ -53,7 +55,8 @@ class ScantxoutsetTest(BitcoinTestFramework):
         self.log.info("Stop node, remove wallet, mine again some blocks...")
         self.stop_node(0)
         shutil.rmtree(os.path.join(self.nodes[0].datadir, self.chain, 'wallets'))
-        self.start_node(0)
+        self.start_node(0, ['-nowallet'])
+        self.import_deterministic_coinbase_privkeys()
         self.nodes[0].generate(110)
 
         scan = self.nodes[0].scantxoutset("start", [])

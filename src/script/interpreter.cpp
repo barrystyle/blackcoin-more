@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2019 The Bitcoin Core developers
+// Copyright (c) 2009-2020 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -82,6 +82,18 @@ bool IsCompressedOrUncompressedPubKey(const valtype &vchPubKey) {
     return true;
 }
 
+bool static IsCompressedPubKey(const valtype &vchPubKey) {
+    if (vchPubKey.size() != CPubKey::COMPRESSED_SIZE) {
+        //  Non-canonical public key: invalid length for compressed key
+        return false;
+    }
+    if (vchPubKey[0] != 0x02 && vchPubKey[0] != 0x03) {
+        //  Non-canonical public key: invalid prefix for compressed key
+        return false;
+    }
+    return true;
+}
+
 /**
  * A canonical signature exists of: <30> <total len> <02> <len R> <R> <02> <len S> <S> <hashtype>
  * Where R and S are not negative (their first byte has its highest bit not set), and not
@@ -127,7 +139,7 @@ bool static IsValidSignatureEncoding(const std::vector<unsigned char> &sig, bool
     // Verify that the length of the signature matches the sum of the length
     // of the elements.
     if ((size_t)(lenR + lenS + (haveHashType ? 7 : 6)) != sig.size()) return false;
- 
+
     // Check whether the R element is an integer.
     if (sig[2] != 0x02) return false;
 
@@ -209,14 +221,18 @@ bool CheckSignatureEncoding(const std::vector<unsigned char> &vchSig, unsigned i
     return true;
 }
 
-bool static CheckPubKeyEncoding(const valtype &vchSig, unsigned int flags, ScriptError* serror) {
-    if ((flags & (SCRIPT_VERIFY_DERKEY | SCRIPT_VERIFY_STRICTENC)) != 0 && !IsCompressedOrUncompressedPubKey(vchSig)) {
+bool static CheckPubKeyEncoding(const valtype &vchPubKey, unsigned int flags, const SigVersion &sigversion, ScriptError* serror) {
+    if ((flags & SCRIPT_VERIFY_STRICTENC) != 0 && !IsCompressedOrUncompressedPubKey(vchPubKey)) {
         return set_error(serror, SCRIPT_ERR_PUBKEYTYPE);
+    }
+    // Only compressed keys are accepted in segwit
+    if ((flags & SCRIPT_VERIFY_WITNESS_PUBKEYTYPE) != 0 && sigversion == SigVersion::WITNESS_V0 && !IsCompressedPubKey(vchPubKey)) {
+        return set_error(serror, SCRIPT_ERR_WITNESS_PUBKEYTYPE);
     }
     return true;
 }
 
-bool static CheckMinimalPush(const valtype& data, opcodetype opcode) {
+bool CheckMinimalPush(const valtype& data, opcodetype opcode) {
     // Excludes OP_1NEGATE, OP_1-16 since they are by definition minimal
     assert(0 <= opcode && opcode <= OP_PUSHDATA4);
     if (data.size() == 0) {
@@ -296,8 +312,8 @@ private:
     uint32_t m_first_false_pos = NO_FALSE;
 
 public:
-    bool empty() { return m_stack_size == 0; }
-    bool all_true() { return m_first_false_pos == NO_FALSE; }
+    bool empty() const { return m_stack_size == 0; }
+    bool all_true() const { return m_first_false_pos == NO_FALSE; }
     void push_back(bool f)
     {
         if (m_first_false_pos == NO_FALSE && !f) {
@@ -333,7 +349,93 @@ public:
 };
 }
 
-bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* serror)
+static bool EvalChecksigPreTapscript(const valtype& vchSig, const valtype& vchPubKey, CScript::const_iterator pbegincodehash, CScript::const_iterator pend, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* serror, bool& fSuccess)
+{
+    assert(sigversion == SigVersion::BASE || sigversion == SigVersion::WITNESS_V0);
+
+    // Subset of script starting at the most recent codeseparator
+    CScript scriptCode(pbegincodehash, pend);
+
+    // Drop the signature in pre-segwit scripts but not segwit scripts
+    if (sigversion == SigVersion::BASE) {
+        int found = FindAndDelete(scriptCode, CScript() << vchSig);
+        if (found > 0 && (flags & SCRIPT_VERIFY_CONST_SCRIPTCODE))
+            return set_error(serror, SCRIPT_ERR_SIG_FINDANDDELETE);
+    }
+
+    if (!CheckSignatureEncoding(vchSig, flags, serror) || !CheckPubKeyEncoding(vchPubKey, flags, sigversion, serror)) {
+        //serror is set
+        return false;
+    }
+    fSuccess = checker.CheckECDSASignature(vchSig, vchPubKey, scriptCode, sigversion);
+
+    if (!fSuccess && (flags & SCRIPT_VERIFY_NULLFAIL) && vchSig.size())
+        return set_error(serror, SCRIPT_ERR_SIG_NULLFAIL);
+
+    return true;
+}
+
+static bool EvalChecksigTapscript(const valtype& sig, const valtype& pubkey, ScriptExecutionData& execdata, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* serror, bool& success)
+{
+    assert(sigversion == SigVersion::TAPSCRIPT);
+
+    /*
+     *  The following validation sequence is consensus critical. Please note how --
+     *    upgradable public key versions precede other rules;
+     *    the script execution fails when using empty signature with invalid public key;
+     *    the script execution fails when using non-empty invalid signature.
+     */
+    success = !sig.empty();
+    if (success) {
+        // Implement the sigops/witnesssize ratio test.
+        // Passing with an upgradable public key version is also counted.
+        assert(execdata.m_validation_weight_left_init);
+        execdata.m_validation_weight_left -= VALIDATION_WEIGHT_PER_SIGOP_PASSED;
+        if (execdata.m_validation_weight_left < 0) {
+            return set_error(serror, SCRIPT_ERR_TAPSCRIPT_VALIDATION_WEIGHT);
+        }
+    }
+    if (pubkey.size() == 0) {
+        return set_error(serror, SCRIPT_ERR_PUBKEYTYPE);
+    } else if (pubkey.size() == 32) {
+        if (success && !checker.CheckSchnorrSignature(sig, pubkey, sigversion, execdata, serror)) {
+            return false; // serror is set
+        }
+    } else {
+        /*
+         *  New public key version softforks should be defined before this `else` block.
+         *  Generally, the new code should not do anything but failing the script execution. To avoid
+         *  consensus bugs, it should not modify any existing values (including `success`).
+         */
+        if ((flags & SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_PUBKEYTYPE) != 0) {
+            return set_error(serror, SCRIPT_ERR_DISCOURAGE_UPGRADABLE_PUBKEYTYPE);
+        }
+    }
+
+    return true;
+}
+
+/** Helper for OP_CHECKSIG, OP_CHECKSIGVERIFY, and (in Tapscript) OP_CHECKSIGADD.
+ *
+ * A return value of false means the script fails entirely. When true is returned, the
+ * success variable indicates whether the signature check itself succeeded.
+ */
+static bool EvalChecksig(const valtype& sig, const valtype& pubkey, CScript::const_iterator pbegincodehash, CScript::const_iterator pend, ScriptExecutionData& execdata, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* serror, bool& success)
+{
+    switch (sigversion) {
+    case SigVersion::BASE:
+    case SigVersion::WITNESS_V0:
+        return EvalChecksigPreTapscript(sig, pubkey, pbegincodehash, pend, flags, checker, sigversion, serror, success);
+    case SigVersion::TAPSCRIPT:
+        return EvalChecksigTapscript(sig, pubkey, execdata, flags, checker, sigversion, serror, success);
+    case SigVersion::TAPROOT:
+        // Key path spending in Taproot has no script, so this is unreachable.
+        break;
+    }
+    assert(false);
+}
+
+bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptExecutionData& execdata, ScriptError* serror)
 {
     static const CScriptNum bnZero(0);
     static const CScriptNum bnOne(1);
@@ -343,6 +445,9 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
     // static const valtype vchZero(0);
     static const valtype vchTrue(1, 1);
 
+    // sigversion cannot be TAPROOT here, as it admits no script execution.
+    assert(sigversion == SigVersion::BASE || sigversion == SigVersion::WITNESS_V0 || sigversion == SigVersion::TAPSCRIPT);
+
     CScript::const_iterator pc = script.begin();
     CScript::const_iterator pend = script.end();
     CScript::const_iterator pbegincodehash = script.begin();
@@ -351,15 +456,18 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
     ConditionStack vfExec;
     std::vector<valtype> altstack;
     set_error(serror, SCRIPT_ERR_UNKNOWN_ERROR);
-    if (script.size() > MAX_SCRIPT_SIZE)
+    if ((sigversion == SigVersion::BASE || sigversion == SigVersion::WITNESS_V0) && script.size() > MAX_SCRIPT_SIZE) {
         return set_error(serror, SCRIPT_ERR_SCRIPT_SIZE);
+    }
     int nOpCount = 0;
     bool fRequireMinimal = (flags & SCRIPT_VERIFY_MINIMALDATA) != 0;
+    uint32_t opcode_pos = 0;
+    execdata.m_codeseparator_pos = 0xFFFFFFFFUL;
+    execdata.m_codeseparator_pos_init = true;
 
     try
     {
-        while (pc < pend)
-        {
+        for (; pc < pend; ++opcode_pos) {
             bool fExec = vfExec.all_true();
 
             //
@@ -370,9 +478,12 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
             if (vchPushValue.size() > MAX_SCRIPT_ELEMENT_SIZE)
                 return set_error(serror, SCRIPT_ERR_PUSH_SIZE);
 
-            // Note how OP_RESERVED does not count towards the opcode limit.
-            if (opcode > OP_16 && ++nOpCount > MAX_OPS_PER_SCRIPT)
-                return set_error(serror, SCRIPT_ERR_OP_COUNT);
+            if (sigversion == SigVersion::BASE || sigversion == SigVersion::WITNESS_V0) {
+                // Note how OP_RESERVED does not count towards the opcode limit.
+                if (opcode > OP_16 && ++nOpCount > MAX_OPS_PER_SCRIPT) {
+                    return set_error(serror, SCRIPT_ERR_OP_COUNT);
+                }
+            }
 
             if (opcode == OP_CAT ||
                 opcode == OP_SUBSTR ||
@@ -391,7 +502,7 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                 opcode == OP_RSHIFT)
                 return set_error(serror, SCRIPT_ERR_DISABLED_OPCODE); // Disabled opcodes (CVE-2010-5137).
 
-            // With SCRIPT_VERIFY_CONST_SCRIPTCODE, OP_CODESEPARATOR is rejected even in an unexecuted branch
+            // With SCRIPT_VERIFY_CONST_SCRIPTCODE, OP_CODESEPARATOR in non-segwit script is rejected even in an unexecuted branch
             if (opcode == OP_CODESEPARATOR && sigversion == SigVersion::BASE && (flags & SCRIPT_VERIFY_CONST_SCRIPTCODE))
                 return set_error(serror, SCRIPT_ERR_OP_CODESEPARATOR);
 
@@ -530,7 +641,16 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                         if (stack.size() < 1)
                             return set_error(serror, SCRIPT_ERR_UNBALANCED_CONDITIONAL);
                         valtype& vch = stacktop(-1);
-                        if (flags & SCRIPT_VERIFY_MINIMALIF) {
+                        // Tapscript requires minimal IF/NOTIF inputs as a consensus rule.
+                        if (sigversion == SigVersion::TAPSCRIPT) {
+                            // The input argument to the OP_IF and OP_NOTIF opcodes must be either
+                            // exactly 0 (the empty vector) or exactly 1 (the one-byte vector with value 1).
+                            if (vch.size() > 1 || (vch.size() == 1 && vch[0] != 1)) {
+                                return set_error(serror, SCRIPT_ERR_TAPSCRIPT_MINIMALIF);
+                            }
+                        }
+                        // Under witness v0 rules it is only a policy rule, enabled through SCRIPT_VERIFY_MINIMALIF.
+                        if (sigversion == SigVersion::WITNESS_V0 && (flags & SCRIPT_VERIFY_MINIMALIF)) {
                             if (vch.size() > 1)
                                 return set_error(serror, SCRIPT_ERR_MINIMALIF);
                             if (vch.size() == 1 && vch[0] != 1)
@@ -948,9 +1068,9 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                     else if (opcode == OP_SHA256)
                         CSHA256().Write(vch.data(), vch.size()).Finalize(vchHash.data());
                     else if (opcode == OP_HASH160)
-                        CHash160().Write(vch.data(), vch.size()).Finalize(vchHash.data());
+                        CHash160().Write(vch).Finalize(vchHash);
                     else if (opcode == OP_HASH256)
-                        CHash256().Write(vch.data(), vch.size()).Finalize(vchHash.data());
+                        CHash256().Write(vch).Finalize(vchHash);
                     popstack(stack);
                     stack.push_back(vchHash);
                 }
@@ -958,10 +1078,12 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
 
                 case OP_CODESEPARATOR:
                 {
-                    // If SCRIPT_VERIFY_CONST_SCRIPTCODE flag is set, use of OP_CODESEPARATOR is rejected.
+                    // If SCRIPT_VERIFY_CONST_SCRIPTCODE flag is set, use of OP_CODESEPARATOR is rejected in pre-segwit
+                    // script, even in an unexecuted branch (this is checked above the opcode case statement).
 
                     // Hash starts after the code separator
                     pbegincodehash = pc;
+                    execdata.m_codeseparator_pos = opcode_pos;
                 }
                 break;
 
@@ -975,25 +1097,8 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                     valtype& vchSig    = stacktop(-2);
                     valtype& vchPubKey = stacktop(-1);
 
-                    // Subset of script starting at the most recent codeseparator
-                    CScript scriptCode(pbegincodehash, pend);
-
-                    // Drop the signature
-                    if (sigversion == SigVersion::BASE) {
-                        int found = FindAndDelete(scriptCode, CScript() << vchSig);
-                        if (found > 0 && (flags & SCRIPT_VERIFY_CONST_SCRIPTCODE))
-                            return set_error(serror, SCRIPT_ERR_SIG_FINDANDDELETE);
-                    }
-
-                    if (!CheckSignatureEncoding(vchSig, flags, serror) || !CheckPubKeyEncoding(vchPubKey, flags, serror)) {
-                        //serror is set
-                        return false;
-                    }
-                    bool fSuccess = checker.CheckSig(vchSig, vchPubKey, scriptCode, sigversion);
-
-                    if (!fSuccess && (flags & SCRIPT_VERIFY_NULLFAIL) && vchSig.size())
-                        return set_error(serror, SCRIPT_ERR_SIG_NULLFAIL);
-
+                    bool fSuccess = true;
+                    if (!EvalChecksig(vchSig, vchPubKey, pbegincodehash, pend, execdata, flags, checker, sigversion, serror, fSuccess)) return false;
                     popstack(stack);
                     popstack(stack);
                     stack.push_back(fSuccess ? vchTrue : vchFalse);
@@ -1007,9 +1112,32 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                 }
                 break;
 
+                case OP_CHECKSIGADD:
+                {
+                    // OP_CHECKSIGADD is only available in Tapscript
+                    if (sigversion == SigVersion::BASE || sigversion == SigVersion::WITNESS_V0) return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
+
+                    // (sig num pubkey -- num)
+                    if (stack.size() < 3) return set_error(serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
+
+                    const valtype& sig = stacktop(-3);
+                    const CScriptNum num(stacktop(-2), fRequireMinimal);
+                    const valtype& pubkey = stacktop(-1);
+
+                    bool success = true;
+                    if (!EvalChecksig(sig, pubkey, pbegincodehash, pend, execdata, flags, checker, sigversion, serror, success)) return false;
+                    popstack(stack);
+                    popstack(stack);
+                    popstack(stack);
+                    stack.push_back((num + (success ? 1 : 0)).getvch());
+                }
+                break;
+
                 case OP_CHECKMULTISIG:
                 case OP_CHECKMULTISIGVERIFY:
                 {
+                    if (sigversion == SigVersion::TAPSCRIPT) return set_error(serror, SCRIPT_ERR_TAPSCRIPT_CHECKMULTISIG);
+
                     // ([sig ...] num_of_signatures [pubkey ...] num_of_pubkeys -- bool)
 
                     int i = 1;
@@ -1041,7 +1169,7 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                     // Subset of script starting at the most recent codeseparator
                     CScript scriptCode(pbegincodehash, pend);
 
-                    // Drop the signatures, since there's no way for a signature to sign itself
+                    // Drop the signature in pre-segwit scripts but not segwit scripts
                     for (int k = 0; k < nSigsCount; k++)
                     {
                         valtype& vchSig = stacktop(-isig-k);
@@ -1061,13 +1189,13 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
                         // Note how this makes the exact order of pubkey/signature evaluation
                         // distinguishable by CHECKMULTISIG NOT if the STRICTENC flag is set.
                         // See the script_(in)valid tests for details.
-                        if (!CheckSignatureEncoding(vchSig, flags, serror) || !CheckPubKeyEncoding(vchPubKey, flags, serror)) {
+                        if (!CheckSignatureEncoding(vchSig, flags, serror) || !CheckPubKeyEncoding(vchPubKey, flags, sigversion, serror)) {
                             // serror is set
                             return false;
                         }
 
                         // Check signature
-                        bool fOk = checker.CheckSig(vchSig, vchPubKey, scriptCode, sigversion);
+                        bool fOk = checker.CheckECDSASignature(vchSig, vchPubKey, scriptCode, sigversion);
 
                         if (fOk) {
                             isig++;
@@ -1135,6 +1263,12 @@ bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& 
         return set_error(serror, SCRIPT_ERR_UNBALANCED_CONDITIONAL);
 
     return set_success(serror);
+}
+
+bool EvalScript(std::vector<std::vector<unsigned char> >& stack, const CScript& script, unsigned int flags, const BaseSignatureChecker& checker, SigVersion sigversion, ScriptError* serror)
+{
+    ScriptExecutionData execdata;
+    return EvalScript(stack, script, flags, checker, sigversion, execdata, serror);
 }
 
 namespace {
@@ -1240,61 +1374,285 @@ public:
     }
 };
 
+/** Compute the (single) SHA256 of the concatenation of all prevouts of a tx. */
 template <class T>
-uint256 GetPrevoutHash(const T& txTo)
+uint256 GetPrevoutsSHA256(const T& txTo)
 {
     CHashWriter ss(SER_GETHASH, 0);
     for (const auto& txin : txTo.vin) {
         ss << txin.prevout;
     }
-    return ss.GetHash();
+    return ss.GetSHA256();
 }
 
+/** Compute the (single) SHA256 of the concatenation of all nSequences of a tx. */
 template <class T>
-uint256 GetSequenceHash(const T& txTo)
+uint256 GetSequencesSHA256(const T& txTo)
 {
     CHashWriter ss(SER_GETHASH, 0);
     for (const auto& txin : txTo.vin) {
         ss << txin.nSequence;
     }
-    return ss.GetHash();
+    return ss.GetSHA256();
 }
 
+/** Compute the (single) SHA256 of the concatenation of all txouts of a tx. */
 template <class T>
-uint256 GetOutputsHash(const T& txTo)
+uint256 GetOutputsSHA256(const T& txTo)
 {
     CHashWriter ss(SER_GETHASH, 0);
     for (const auto& txout : txTo.vout) {
         ss << txout;
     }
-    return ss.GetHash();
+    return ss.GetSHA256();
 }
+
+/** Compute the (single) SHA256 of the concatenation of all amounts spent by a tx. */
+uint256 GetSpentAmountsSHA256(const std::vector<CTxOut>& outputs_spent)
+{
+    CHashWriter ss(SER_GETHASH, 0);
+    for (const auto& txout : outputs_spent) {
+        ss << txout.nValue;
+    }
+    return ss.GetSHA256();
+}
+
+/** Compute the (single) SHA256 of the concatenation of all scriptPubKeys spent by a tx. */
+uint256 GetSpentScriptsSHA256(const std::vector<CTxOut>& outputs_spent)
+{
+    CHashWriter ss(SER_GETHASH, 0);
+    for (const auto& txout : outputs_spent) {
+        ss << txout.scriptPubKey;
+    }
+    return ss.GetSHA256();
+}
+
 
 } // namespace
 
 template <class T>
+void PrecomputedTransactionData::Init(const T& txTo, std::vector<CTxOut>&& spent_outputs, bool force)
+{
+    assert(!m_spent_outputs_ready);
+
+    m_spent_outputs = std::move(spent_outputs);
+    if (!m_spent_outputs.empty()) {
+        assert(m_spent_outputs.size() == txTo.vin.size());
+        m_spent_outputs_ready = true;
+    }
+
+    // Determine which precomputation-impacting features this transaction uses.
+    bool uses_bip143_segwit = force;
+    bool uses_bip341_taproot = force;
+    for (size_t inpos = 0; inpos < txTo.vin.size() && !(uses_bip143_segwit && uses_bip341_taproot); ++inpos) {
+        if (!txTo.vin[inpos].scriptWitness.IsNull()) {
+            if (m_spent_outputs_ready && m_spent_outputs[inpos].scriptPubKey.size() == 2 + WITNESS_V1_TAPROOT_SIZE &&
+                m_spent_outputs[inpos].scriptPubKey[0] == OP_1) {
+                // Treat every witness-bearing spend with 34-byte scriptPubKey that starts with OP_1 as a Taproot
+                // spend. This only works if spent_outputs was provided as well, but if it wasn't, actual validation
+                // will fail anyway. Note that this branch may trigger for scriptPubKeys that aren't actually segwit
+                // but in that case validation will fail as SCRIPT_ERR_WITNESS_UNEXPECTED anyway.
+                uses_bip341_taproot = true;
+            } else {
+                // Treat every spend that's not known to native witness v1 as a Witness v0 spend. This branch may
+                // also be taken for unknown witness versions, but it is harmless, and being precise would require
+                // P2SH evaluation to find the redeemScript.
+                uses_bip143_segwit = true;
+            }
+        }
+        if (uses_bip341_taproot && uses_bip143_segwit) break; // No need to scan further if we already need all.
+    }
+
+    if (uses_bip143_segwit || uses_bip341_taproot) {
+        // Computations shared between both sighash schemes.
+        m_prevouts_single_hash = GetPrevoutsSHA256(txTo);
+        m_sequences_single_hash = GetSequencesSHA256(txTo);
+        m_outputs_single_hash = GetOutputsSHA256(txTo);
+    }
+    if (uses_bip143_segwit) {
+        hashPrevouts = SHA256Uint256(m_prevouts_single_hash);
+        hashSequence = SHA256Uint256(m_sequences_single_hash);
+        hashOutputs = SHA256Uint256(m_outputs_single_hash);
+        m_bip143_segwit_ready = true;
+    }
+    if (uses_bip341_taproot) {
+        m_spent_amounts_single_hash = GetSpentAmountsSHA256(m_spent_outputs);
+        m_spent_scripts_single_hash = GetSpentScriptsSHA256(m_spent_outputs);
+        m_bip341_taproot_ready = true;
+    }
+}
+
+template <class T>
 PrecomputedTransactionData::PrecomputedTransactionData(const T& txTo)
 {
-    hashPrevouts = GetPrevoutHash(txTo);
-    hashSequence = GetSequenceHash(txTo);
-    hashOutputs = GetOutputsHash(txTo);
-    ready = true;
+    Init(txTo, {});
 }
 
 // explicit instantiation
+template void PrecomputedTransactionData::Init(const CTransaction& txTo, std::vector<CTxOut>&& spent_outputs, bool force);
+template void PrecomputedTransactionData::Init(const CMutableTransaction& txTo, std::vector<CTxOut>&& spent_outputs, bool force);
 template PrecomputedTransactionData::PrecomputedTransactionData(const CTransaction& txTo);
 template PrecomputedTransactionData::PrecomputedTransactionData(const CMutableTransaction& txTo);
+
+static const CHashWriter HASHER_TAPSIGHASH = TaggedHash("TapSighash");
+const CHashWriter HASHER_TAPLEAF = TaggedHash("TapLeaf");
+const CHashWriter HASHER_TAPBRANCH = TaggedHash("TapBranch");
+
+static bool HandleMissingData(MissingDataBehavior mdb)
+{
+    switch (mdb) {
+    case MissingDataBehavior::ASSERT_FAIL:
+        assert(!"Missing data");
+        break;
+    case MissingDataBehavior::FAIL:
+        return false;
+    }
+    assert(!"Unknown MissingDataBehavior value");
+}
+
+template<typename T>
+bool SignatureHashSchnorr(uint256& hash_out, const ScriptExecutionData& execdata, const T& tx_to, uint32_t in_pos, uint8_t hash_type, SigVersion sigversion, const PrecomputedTransactionData& cache, MissingDataBehavior mdb)
+{
+    uint8_t ext_flag, key_version;
+    switch (sigversion) {
+    case SigVersion::TAPROOT:
+        ext_flag = 0;
+        // key_version is not used and left uninitialized.
+        break;
+    case SigVersion::TAPSCRIPT:
+        ext_flag = 1;
+        // key_version must be 0 for now, representing the current version of
+        // 32-byte public keys in the tapscript signature opcode execution.
+        // An upgradable public key version (with a size not 32-byte) may
+        // request a different key_version with a new sigversion.
+        key_version = 0;
+        break;
+    default:
+        assert(false);
+    }
+    assert(in_pos < tx_to.vin.size());
+    if (!(cache.m_bip341_taproot_ready && cache.m_spent_outputs_ready)) {
+        return HandleMissingData(mdb);
+    }
+
+    CHashWriter ss = HASHER_TAPSIGHASH;
+
+    // Epoch
+    static constexpr uint8_t EPOCH = 0;
+    ss << EPOCH;
+
+    // Hash type
+    const uint8_t output_type = (hash_type == SIGHASH_DEFAULT) ? SIGHASH_ALL : (hash_type & SIGHASH_OUTPUT_MASK); // Default (no sighash byte) is equivalent to SIGHASH_ALL
+    const uint8_t input_type = hash_type & SIGHASH_INPUT_MASK;
+    if (!(hash_type <= 0x03 || (hash_type >= 0x81 && hash_type <= 0x83))) return false;
+    ss << hash_type;
+
+    // Transaction level data
+    ss << tx_to.nVersion;
+    ss << tx_to.nLockTime;
+    if (input_type != SIGHASH_ANYONECANPAY) {
+        ss << cache.m_prevouts_single_hash;
+        ss << cache.m_spent_amounts_single_hash;
+        ss << cache.m_spent_scripts_single_hash;
+        ss << cache.m_sequences_single_hash;
+    }
+    if (output_type == SIGHASH_ALL) {
+        ss << cache.m_outputs_single_hash;
+    }
+
+    // Data about the input/prevout being spent
+    assert(execdata.m_annex_init);
+    const bool have_annex = execdata.m_annex_present;
+    const uint8_t spend_type = (ext_flag << 1) + (have_annex ? 1 : 0); // The low bit indicates whether an annex is present.
+    ss << spend_type;
+    if (input_type == SIGHASH_ANYONECANPAY) {
+        ss << tx_to.vin[in_pos].prevout;
+        ss << cache.m_spent_outputs[in_pos];
+        ss << tx_to.vin[in_pos].nSequence;
+    } else {
+        ss << in_pos;
+    }
+    if (have_annex) {
+        ss << execdata.m_annex_hash;
+    }
+
+    // Data about the output (if only one).
+    if (output_type == SIGHASH_SINGLE) {
+        if (in_pos >= tx_to.vout.size()) return false;
+        CHashWriter sha_single_output(SER_GETHASH, 0);
+        sha_single_output << tx_to.vout[in_pos];
+        ss << sha_single_output.GetSHA256();
+    }
+
+    // Additional data for BIP 342 signatures
+    if (sigversion == SigVersion::TAPSCRIPT) {
+        assert(execdata.m_tapleaf_hash_init);
+        ss << execdata.m_tapleaf_hash;
+        ss << key_version;
+        assert(execdata.m_codeseparator_pos_init);
+        ss << execdata.m_codeseparator_pos;
+    }
+
+    hash_out = ss.GetSHA256();
+    return true;
+}
 
 template <class T>
 uint256 SignatureHash(const CScript& scriptCode, const T& txTo, unsigned int nIn, int nHashType, const CAmount& amount, SigVersion sigversion, const PrecomputedTransactionData* cache)
 {
     assert(nIn < txTo.vin.size());
 
+    if (sigversion == SigVersion::WITNESS_V0) {
+        uint256 hashPrevouts;
+        uint256 hashSequence;
+        uint256 hashOutputs;
+        const bool cacheready = cache && cache->m_bip143_segwit_ready;
+
+        if (!(nHashType & SIGHASH_ANYONECANPAY)) {
+            hashPrevouts = cacheready ? cache->hashPrevouts : SHA256Uint256(GetPrevoutsSHA256(txTo));
+        }
+
+        if (!(nHashType & SIGHASH_ANYONECANPAY) && (nHashType & 0x1f) != SIGHASH_SINGLE && (nHashType & 0x1f) != SIGHASH_NONE) {
+            hashSequence = cacheready ? cache->hashSequence : SHA256Uint256(GetSequencesSHA256(txTo));
+        }
+
+
+        if ((nHashType & 0x1f) != SIGHASH_SINGLE && (nHashType & 0x1f) != SIGHASH_NONE) {
+            hashOutputs = cacheready ? cache->hashOutputs : SHA256Uint256(GetOutputsSHA256(txTo));
+        } else if ((nHashType & 0x1f) == SIGHASH_SINGLE && nIn < txTo.vout.size()) {
+            CHashWriter ss(SER_GETHASH, 0);
+            ss << txTo.vout[nIn];
+            hashOutputs = ss.GetHash();
+        }
+
+        CHashWriter ss(SER_GETHASH, 0);
+        // Version
+        ss << txTo.nVersion;
+        // Input prevouts/nSequence (none/all, depending on flags)
+        ss << hashPrevouts;
+        ss << hashSequence;
+        // The input being signed (replacing the scriptSig with scriptCode + amount)
+        // The prevout may already be contained in hashPrevout, and the nSequence
+        // may already be contain in hashSequence.
+        ss << txTo.vin[nIn].prevout;
+        ss << scriptCode;
+        ss << amount;
+        ss << txTo.vin[nIn].nSequence;
+        // Outputs (none/one/all, depending on flags)
+        ss << hashOutputs;
+        // Locktime
+        ss << txTo.nLockTime;
+        // Sighash type
+        ss << nHashType;
+
+        return ss.GetHash();
+    }
+
     // Check for invalid use of SIGHASH_SINGLE
     if ((nHashType & 0x1f) == SIGHASH_SINGLE) {
         if (nIn >= txTo.vout.size()) {
             //  nOut out of range
-            return UINT256_ONE();
+            return uint256::ONE;
         }
     }
 
@@ -1308,13 +1666,19 @@ uint256 SignatureHash(const CScript& scriptCode, const T& txTo, unsigned int nIn
 }
 
 template <class T>
-bool GenericTransactionSignatureChecker<T>::VerifySignature(const std::vector<unsigned char>& vchSig, const CPubKey& pubkey, const uint256& sighash) const
+bool GenericTransactionSignatureChecker<T>::VerifyECDSASignature(const std::vector<unsigned char>& vchSig, const CPubKey& pubkey, const uint256& sighash) const
 {
     return pubkey.Verify(sighash, vchSig);
 }
 
 template <class T>
-bool GenericTransactionSignatureChecker<T>::CheckSig(const std::vector<unsigned char>& vchSigIn, const std::vector<unsigned char>& vchPubKey, const CScript& scriptCode, SigVersion sigversion) const
+bool GenericTransactionSignatureChecker<T>::VerifySchnorrSignature(Span<const unsigned char> sig, const XOnlyPubKey& pubkey, const uint256& sighash) const
+{
+    return pubkey.VerifySchnorr(sighash, sig);
+}
+
+template <class T>
+bool GenericTransactionSignatureChecker<T>::CheckECDSASignature(const std::vector<unsigned char>& vchSigIn, const std::vector<unsigned char>& vchPubKey, const CScript& scriptCode, SigVersion sigversion) const
 {
     CPubKey pubkey(vchPubKey);
     if (!pubkey.IsValid())
@@ -1327,11 +1691,42 @@ bool GenericTransactionSignatureChecker<T>::CheckSig(const std::vector<unsigned 
     int nHashType = vchSig.back();
     vchSig.pop_back();
 
+    // Witness sighashes need the amount.
+    if (sigversion == SigVersion::WITNESS_V0 && amount < 0) return HandleMissingData(m_mdb);
+
     uint256 sighash = SignatureHash(scriptCode, *txTo, nIn, nHashType, amount, sigversion, this->txdata);
 
-    if (!VerifySignature(vchSig, pubkey, sighash))
+    if (!VerifyECDSASignature(vchSig, pubkey, sighash))
         return false;
 
+    return true;
+}
+
+template <class T>
+bool GenericTransactionSignatureChecker<T>::CheckSchnorrSignature(Span<const unsigned char> sig, Span<const unsigned char> pubkey_in, SigVersion sigversion, const ScriptExecutionData& execdata, ScriptError* serror) const
+{
+    assert(sigversion == SigVersion::TAPROOT || sigversion == SigVersion::TAPSCRIPT);
+    // Schnorr signatures have 32-byte public keys. The caller is responsible for enforcing this.
+    assert(pubkey_in.size() == 32);
+    // Note that in Tapscript evaluation, empty signatures are treated specially (invalid signature that does not
+    // abort script execution). This is implemented in EvalChecksigTapscript, which won't invoke
+    // CheckSchnorrSignature in that case. In other contexts, they are invalid like every other signature with
+    // size different from 64 or 65.
+    if (sig.size() != 64 && sig.size() != 65) return set_error(serror, SCRIPT_ERR_SCHNORR_SIG_SIZE);
+
+    XOnlyPubKey pubkey{pubkey_in};
+
+    uint8_t hashtype = SIGHASH_DEFAULT;
+    if (sig.size() == 65) {
+        hashtype = SpanPopBack(sig);
+        if (hashtype == SIGHASH_DEFAULT) return set_error(serror, SCRIPT_ERR_SCHNORR_SIG_HASHTYPE);
+    }
+    uint256 sighash;
+    if (!this->txdata) return HandleMissingData(m_mdb);
+    if (!SignatureHashSchnorr(sighash, execdata, *txTo, nIn, hashtype, sigversion, *this->txdata, m_mdb)) {
+        return set_error(serror, SCRIPT_ERR_SCHNORR_SIG_HASHTYPE);
+    }
+    if (!VerifySchnorrSignature(sig, pubkey, sighash)) return set_error(serror, SCRIPT_ERR_SCHNORR_SIG);
     return true;
 }
 
@@ -1356,9 +1751,9 @@ bool GenericTransactionSignatureChecker<T>::CheckLockTime(const CScriptNum& nLoc
     if (nLockTime > (int64_t)txTo->nLockTime)
         return false;
 
-    // Finally the nLockTime feature can be disabled and thus
-    // CHECKLOCKTIMEVERIFY bypassed if every txin has been
-    // finalized by setting nSequence to maxint. The
+    // Finally the nLockTime feature can be disabled in IsFinalTx()
+    // and thus CHECKLOCKTIMEVERIFY bypassed if every txin has
+    // been finalized by setting nSequence to maxint. The
     // transaction would be allowed into the blockchain, making
     // the opcode ineffective.
     //
@@ -1423,8 +1818,173 @@ bool GenericTransactionSignatureChecker<T>::CheckSequence(const CScriptNum& nSeq
 template class GenericTransactionSignatureChecker<CTransaction>;
 template class GenericTransactionSignatureChecker<CMutableTransaction>;
 
-bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, unsigned int flags, const BaseSignatureChecker& checker, ScriptError* serror)
+static bool ExecuteWitnessScript(const Span<const valtype>& stack_span, const CScript& scriptPubKey, unsigned int flags, SigVersion sigversion, const BaseSignatureChecker& checker, ScriptExecutionData& execdata, ScriptError* serror)
 {
+    std::vector<valtype> stack{stack_span.begin(), stack_span.end()};
+
+    if (sigversion == SigVersion::TAPSCRIPT) {
+        // OP_SUCCESSx processing overrides everything, including stack element size limits
+        CScript::const_iterator pc = scriptPubKey.begin();
+        while (pc < scriptPubKey.end()) {
+            opcodetype opcode;
+            if (!scriptPubKey.GetOp(pc, opcode)) {
+                // Note how this condition would not be reached if an unknown OP_SUCCESSx was found
+                return set_error(serror, SCRIPT_ERR_BAD_OPCODE);
+            }
+            // New opcodes will be listed here. May use a different sigversion to modify existing opcodes.
+            if (IsOpSuccess(opcode)) {
+                if (flags & SCRIPT_VERIFY_DISCOURAGE_OP_SUCCESS) {
+                    return set_error(serror, SCRIPT_ERR_DISCOURAGE_OP_SUCCESS);
+                }
+                return set_success(serror);
+            }
+        }
+
+        // Tapscript enforces initial stack size limits (altstack is empty here)
+        if (stack.size() > MAX_STACK_SIZE) return set_error(serror, SCRIPT_ERR_STACK_SIZE);
+    }
+
+    // Disallow stack item size > MAX_SCRIPT_ELEMENT_SIZE in witness stack
+    for (const valtype& elem : stack) {
+        if (elem.size() > MAX_SCRIPT_ELEMENT_SIZE) return set_error(serror, SCRIPT_ERR_PUSH_SIZE);
+    }
+
+    // Run the script interpreter.
+    if (!EvalScript(stack, scriptPubKey, flags, checker, sigversion, execdata, serror)) return false;
+
+    // Scripts inside witness implicitly require cleanstack behaviour
+    if (stack.size() != 1) return set_error(serror, SCRIPT_ERR_CLEANSTACK);
+    if (!CastToBool(stack.back())) return set_error(serror, SCRIPT_ERR_EVAL_FALSE);
+    return true;
+}
+
+uint256 ComputeTapleafHash(uint8_t leaf_version, const CScript& script)
+{
+    return (CHashWriter(HASHER_TAPLEAF) << leaf_version << script).GetSHA256();
+}
+
+uint256 ComputeTaprootMerkleRoot(Span<const unsigned char> control, const uint256& tapleaf_hash)
+{
+    const int path_len = (control.size() - TAPROOT_CONTROL_BASE_SIZE) / TAPROOT_CONTROL_NODE_SIZE;
+    uint256 k = tapleaf_hash;
+    for (int i = 0; i < path_len; ++i) {
+        CHashWriter ss_branch{HASHER_TAPBRANCH};
+        Span<const unsigned char> node(control.data() + TAPROOT_CONTROL_BASE_SIZE + TAPROOT_CONTROL_NODE_SIZE * i, TAPROOT_CONTROL_NODE_SIZE);
+        if (std::lexicographical_compare(k.begin(), k.end(), node.begin(), node.end())) {
+            ss_branch << k << node;
+        } else {
+            ss_branch << node << k;
+        }
+        k = ss_branch.GetSHA256();
+    }
+    return k;
+}
+
+static bool VerifyTaprootCommitment(const std::vector<unsigned char>& control, const std::vector<unsigned char>& program, const uint256& tapleaf_hash)
+{
+    assert(control.size() >= TAPROOT_CONTROL_BASE_SIZE);
+    assert(program.size() >= uint256::size());
+    //! The internal pubkey (x-only, so no Y coordinate parity).
+    const XOnlyPubKey p{uint256(std::vector<unsigned char>(control.begin() + 1, control.begin() + TAPROOT_CONTROL_BASE_SIZE))};
+    //! The output pubkey (taken from the scriptPubKey).
+    const XOnlyPubKey q{uint256(program)};
+    // Compute the Merkle root from the leaf and the provided path.
+    const uint256 merkle_root = ComputeTaprootMerkleRoot(control, tapleaf_hash);
+    // Verify that the output pubkey matches the tweaked internal pubkey, after correcting for parity.
+    return q.CheckTapTweak(p, merkle_root, control[0] & 1);
+}
+
+static bool VerifyWitnessProgram(const CScriptWitness& witness, int witversion, const std::vector<unsigned char>& program, unsigned int flags, const BaseSignatureChecker& checker, ScriptError* serror, bool is_p2sh)
+{
+    CScript exec_script; //!< Actually executed script (last stack item in P2WSH; implied P2PKH script in P2WPKH; leaf script in P2TR)
+    Span<const valtype> stack{witness.stack};
+    ScriptExecutionData execdata;
+
+    if (witversion == 0) {
+        if (program.size() == WITNESS_V0_SCRIPTHASH_SIZE) {
+            // BIP141 P2WSH: 32-byte witness v0 program (which encodes SHA256(script))
+            if (stack.size() == 0) {
+                return set_error(serror, SCRIPT_ERR_WITNESS_PROGRAM_WITNESS_EMPTY);
+            }
+            const valtype& script_bytes = SpanPopBack(stack);
+            exec_script = CScript(script_bytes.begin(), script_bytes.end());
+            uint256 hash_exec_script;
+            CSHA256().Write(exec_script.data(), exec_script.size()).Finalize(hash_exec_script.begin());
+            if (memcmp(hash_exec_script.begin(), program.data(), 32)) {
+                return set_error(serror, SCRIPT_ERR_WITNESS_PROGRAM_MISMATCH);
+            }
+            return ExecuteWitnessScript(stack, exec_script, flags, SigVersion::WITNESS_V0, checker, execdata, serror);
+        } else if (program.size() == WITNESS_V0_KEYHASH_SIZE) {
+            // BIP141 P2WPKH: 20-byte witness v0 program (which encodes Hash160(pubkey))
+            if (stack.size() != 2) {
+                return set_error(serror, SCRIPT_ERR_WITNESS_PROGRAM_MISMATCH); // 2 items in witness
+            }
+            exec_script << OP_DUP << OP_HASH160 << program << OP_EQUALVERIFY << OP_CHECKSIG;
+            return ExecuteWitnessScript(stack, exec_script, flags, SigVersion::WITNESS_V0, checker, execdata, serror);
+        } else {
+            return set_error(serror, SCRIPT_ERR_WITNESS_PROGRAM_WRONG_LENGTH);
+        }
+    } else if (witversion == 1 && program.size() == WITNESS_V1_TAPROOT_SIZE && !is_p2sh) {
+        // BIP341 Taproot: 32-byte non-P2SH witness v1 program (which encodes a P2C-tweaked pubkey)
+        if (!(flags & SCRIPT_VERIFY_TAPROOT)) return set_success(serror);
+        if (stack.size() == 0) return set_error(serror, SCRIPT_ERR_WITNESS_PROGRAM_WITNESS_EMPTY);
+        if (stack.size() >= 2 && !stack.back().empty() && stack.back()[0] == ANNEX_TAG) {
+            // Drop annex (this is non-standard; see IsWitnessStandard)
+            const valtype& annex = SpanPopBack(stack);
+            execdata.m_annex_hash = (CHashWriter(SER_GETHASH, 0) << annex).GetSHA256();
+            execdata.m_annex_present = true;
+        } else {
+            execdata.m_annex_present = false;
+        }
+        execdata.m_annex_init = true;
+        if (stack.size() == 1) {
+            // Key path spending (stack size is 1 after removing optional annex)
+            if (!checker.CheckSchnorrSignature(stack.front(), program, SigVersion::TAPROOT, execdata, serror)) {
+                return false; // serror is set
+            }
+            return set_success(serror);
+        } else {
+            // Script path spending (stack size is >1 after removing optional annex)
+            const valtype& control = SpanPopBack(stack);
+            const valtype& script_bytes = SpanPopBack(stack);
+            exec_script = CScript(script_bytes.begin(), script_bytes.end());
+            if (control.size() < TAPROOT_CONTROL_BASE_SIZE || control.size() > TAPROOT_CONTROL_MAX_SIZE || ((control.size() - TAPROOT_CONTROL_BASE_SIZE) % TAPROOT_CONTROL_NODE_SIZE) != 0) {
+                return set_error(serror, SCRIPT_ERR_TAPROOT_WRONG_CONTROL_SIZE);
+            }
+            execdata.m_tapleaf_hash = ComputeTapleafHash(control[0] & TAPROOT_LEAF_MASK, exec_script);
+            if (!VerifyTaprootCommitment(control, program, execdata.m_tapleaf_hash)) {
+                return set_error(serror, SCRIPT_ERR_WITNESS_PROGRAM_MISMATCH);
+            }
+            execdata.m_tapleaf_hash_init = true;
+            if ((control[0] & TAPROOT_LEAF_MASK) == TAPROOT_LEAF_TAPSCRIPT) {
+                // Tapscript (leaf version 0xc0)
+                execdata.m_validation_weight_left = ::GetSerializeSize(witness.stack, PROTOCOL_VERSION) + VALIDATION_WEIGHT_OFFSET;
+                execdata.m_validation_weight_left_init = true;
+                return ExecuteWitnessScript(stack, exec_script, flags, SigVersion::TAPSCRIPT, checker, execdata, serror);
+            }
+            if (flags & SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_TAPROOT_VERSION) {
+                return set_error(serror, SCRIPT_ERR_DISCOURAGE_UPGRADABLE_TAPROOT_VERSION);
+            }
+            return set_success(serror);
+        }
+    } else {
+        if (flags & SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_WITNESS_PROGRAM) {
+            return set_error(serror, SCRIPT_ERR_DISCOURAGE_UPGRADABLE_WITNESS_PROGRAM);
+        }
+        // Other version/size/p2sh combinations return true for future softfork compatibility
+        return true;
+    }
+    // There is intentionally no return statement here, to be able to use "control reaches end of non-void function" warnings to detect gaps in the logic above.
+}
+
+bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, const CScriptWitness* witness, unsigned int flags, const BaseSignatureChecker& checker, ScriptError* serror)
+{
+    static const CScriptWitness emptyWitness;
+    if (witness == nullptr) {
+        witness = &emptyWitness;
+    }
+    bool hadWitness = false;
+
     set_error(serror, SCRIPT_ERR_UNKNOWN_ERROR);
 
     if ((flags & SCRIPT_VERIFY_SIGPUSHONLY) != 0 && !scriptSig.IsPushOnly()) {
@@ -1446,6 +2006,25 @@ bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, unsigne
         return set_error(serror, SCRIPT_ERR_EVAL_FALSE);
     if (CastToBool(stack.back()) == false)
         return set_error(serror, SCRIPT_ERR_EVAL_FALSE);
+
+    // Bare witness programs
+    int witnessversion;
+    std::vector<unsigned char> witnessprogram;
+    if (flags & SCRIPT_VERIFY_WITNESS) {
+        if (scriptPubKey.IsWitnessProgram(witnessversion, witnessprogram)) {
+            hadWitness = true;
+            if (scriptSig.size() != 0) {
+                // The scriptSig must be _exactly_ CScript(), otherwise we reintroduce malleability.
+                return set_error(serror, SCRIPT_ERR_WITNESS_MALLEATED);
+            }
+            if (!VerifyWitnessProgram(*witness, witnessversion, witnessprogram, flags, checker, serror, /* is_p2sh */ false)) {
+                return false;
+            }
+            // Bypass the cleanstack check at the end. The actual stack is obviously not clean
+            // for witness programs.
+            stack.resize(1);
+        }
+    }
 
     // Additional validation for spend-to-script-hash transactions:
     if ((flags & SCRIPT_VERIFY_P2SH) && scriptPubKey.IsPayToScriptHash())
@@ -1473,19 +2052,95 @@ bool VerifyScript(const CScript& scriptSig, const CScript& scriptPubKey, unsigne
             return set_error(serror, SCRIPT_ERR_EVAL_FALSE);
         if (!CastToBool(stack.back()))
             return set_error(serror, SCRIPT_ERR_EVAL_FALSE);
+
+        // P2SH witness program
+        if (flags & SCRIPT_VERIFY_WITNESS) {
+            if (pubKey2.IsWitnessProgram(witnessversion, witnessprogram)) {
+                hadWitness = true;
+                if (scriptSig != CScript() << std::vector<unsigned char>(pubKey2.begin(), pubKey2.end())) {
+                    // The scriptSig must be _exactly_ a single push of the redeemScript. Otherwise we
+                    // reintroduce malleability.
+                    return set_error(serror, SCRIPT_ERR_WITNESS_MALLEATED_P2SH);
+                }
+                if (!VerifyWitnessProgram(*witness, witnessversion, witnessprogram, flags, checker, serror, /* is_p2sh */ true)) {
+                    return false;
+                }
+                // Bypass the cleanstack check at the end. The actual stack is obviously not clean
+                // for witness programs.
+                stack.resize(1);
+            }
+        }
     }
 
     // The CLEANSTACK check is only performed after potential P2SH evaluation,
     // as the non-P2SH evaluation of a P2SH script will obviously not result in
-    // a clean stack (the P2SH inputs remain).
+    // a clean stack (the P2SH inputs remain). The same holds for witness evaluation.
     if ((flags & SCRIPT_VERIFY_CLEANSTACK) != 0) {
         // Disallow CLEANSTACK without P2SH, as otherwise a switch CLEANSTACK->P2SH+CLEANSTACK
         // would be possible, which is not a softfork (and P2SH should be one).
         assert((flags & SCRIPT_VERIFY_P2SH) != 0);
+        assert((flags & SCRIPT_VERIFY_WITNESS) != 0);
         if (stack.size() != 1) {
             return set_error(serror, SCRIPT_ERR_CLEANSTACK);
         }
     }
 
+    if (flags & SCRIPT_VERIFY_WITNESS) {
+        // We can't check for correct unexpected witness data if P2SH was off, so require
+        // that WITNESS implies P2SH. Otherwise, going from WITNESS->P2SH+WITNESS would be
+        // possible, which is not a softfork.
+        assert((flags & SCRIPT_VERIFY_P2SH) != 0);
+        if (!hadWitness && !witness->IsNull()) {
+            return set_error(serror, SCRIPT_ERR_WITNESS_UNEXPECTED);
+        }
+    }
+
     return set_success(serror);
+}
+
+size_t static WitnessSigOps(int witversion, const std::vector<unsigned char>& witprogram, const CScriptWitness& witness)
+{
+    if (witversion == 0) {
+        if (witprogram.size() == WITNESS_V0_KEYHASH_SIZE)
+            return 1;
+
+        if (witprogram.size() == WITNESS_V0_SCRIPTHASH_SIZE && witness.stack.size() > 0) {
+            CScript subscript(witness.stack.back().begin(), witness.stack.back().end());
+            return subscript.GetSigOpCount(true);
+        }
+    }
+
+    // Future flags may be implemented here.
+    return 0;
+}
+
+size_t CountWitnessSigOps(const CScript& scriptSig, const CScript& scriptPubKey, const CScriptWitness* witness, unsigned int flags)
+{
+    static const CScriptWitness witnessEmpty;
+
+    if ((flags & SCRIPT_VERIFY_WITNESS) == 0) {
+        return 0;
+    }
+    assert((flags & SCRIPT_VERIFY_P2SH) != 0);
+
+    int witnessversion;
+    std::vector<unsigned char> witnessprogram;
+    if (scriptPubKey.IsWitnessProgram(witnessversion, witnessprogram)) {
+        return WitnessSigOps(witnessversion, witnessprogram, witness ? *witness : witnessEmpty);
+    }
+
+    if (scriptPubKey.IsPayToScriptHash() && scriptSig.IsPushOnly()) {
+        CScript::const_iterator pc = scriptSig.begin();
+        std::vector<unsigned char> data;
+        while (pc < scriptSig.end()) {
+            opcodetype opcode;
+            scriptSig.GetOp(pc, opcode, data);
+        }
+        CScript subscript(data.begin(), data.end());
+        if (subscript.IsWitnessProgram(witnessversion, witnessprogram)) {
+            return WitnessSigOps(witnessversion, witnessprogram, witness ? *witness : witnessEmpty);
+        }
+    }
+
+    return 0;
 }

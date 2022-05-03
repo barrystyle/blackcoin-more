@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 The Bitcoin Core developers
+// Copyright (c) 2016-2020 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -14,13 +14,17 @@
 
 #include <array>
 
-// Microbenchmark for verification of a basic P2PKH script. Can be easily
+// Microbenchmark for verification of a basic P2WPKH script. Can be easily
 // modified to measure performance of other types of scripts.
-static void VerifyScriptBench(benchmark::State& state)
+static void VerifyScriptBench(benchmark::Bench& bench)
 {
-    const int flags = SCRIPT_VERIFY_P2SH;
+    const ECCVerifyHandle verify_handle;
+    ECC_Start();
 
-    // Keypair.
+    const int flags = SCRIPT_VERIFY_WITNESS | SCRIPT_VERIFY_P2SH;
+    const int witnessversion = 0;
+
+    // Key pair.
     CKey key;
     static const std::array<unsigned char, 32> vchKey = {
         {
@@ -30,25 +34,29 @@ static void VerifyScriptBench(benchmark::State& state)
     key.Set(vchKey.begin(), vchKey.end(), false);
     CPubKey pubkey = key.GetPubKey();
     uint160 pubkeyHash;
-    CHash160().Write(pubkey.begin(), pubkey.size()).Finalize(pubkeyHash.begin());
+    CHash160().Write(pubkey).Finalize(pubkeyHash);
 
     // Script.
-    CScript scriptPubKey = CScript() << ToByteVector(pubkeyHash);
+    CScript scriptPubKey = CScript() << witnessversion << ToByteVector(pubkeyHash);
     CScript scriptSig;
-    CScript txScriptPubkey = CScript() << OP_DUP << OP_HASH160 << ToByteVector(pubkeyHash) << OP_EQUALVERIFY << OP_CHECKSIG;
+    CScript witScriptPubkey = CScript() << OP_DUP << OP_HASH160 << ToByteVector(pubkeyHash) << OP_EQUALVERIFY << OP_CHECKSIG;
     const CMutableTransaction& txCredit = BuildCreditingTransaction(scriptPubKey, 1);
-    CMutableTransaction txSpend = BuildSpendingTransaction(scriptSig, CTransaction(txCredit));
-    std::vector<unsigned char> vchBlockSig;
-    key.Sign(SignatureHash(txScriptPubkey, txSpend, 0, SIGHASH_ALL, txCredit.vout[0].nValue, SigVersion::BASE), vchBlockSig);
+    CMutableTransaction txSpend = BuildSpendingTransaction(scriptSig, CScriptWitness(), CTransaction(txCredit));
+    CScriptWitness& witness = txSpend.vin[0].scriptWitness;
+    witness.stack.emplace_back();
+    key.Sign(SignatureHash(witScriptPubkey, txSpend, 0, SIGHASH_ALL, txCredit.vout[0].nValue, SigVersion::WITNESS_V0), witness.stack.back());
+    witness.stack.back().push_back(static_cast<unsigned char>(SIGHASH_ALL));
+    witness.stack.push_back(ToByteVector(pubkey));
 
     // Benchmark.
-    while (state.KeepRunning()) {
+    bench.run([&] {
         ScriptError err;
         bool success = VerifyScript(
             txSpend.vin[0].scriptSig,
             txCredit.vout[0].scriptPubKey,
+            &txSpend.vin[0].scriptWitness,
             flags,
-            MutableTransactionSignatureChecker(&txSpend, 0, txCredit.vout[0].nValue),
+            MutableTransactionSignatureChecker(&txSpend, 0, txCredit.vout[0].nValue, MissingDataBehavior::ASSERT_FAIL),
             &err);
         assert(err == SCRIPT_ERR_OK);
         assert(success);
@@ -63,10 +71,12 @@ static void VerifyScriptBench(benchmark::State& state)
             (const unsigned char*)stream.data(), stream.size(), 0, flags, nullptr);
         assert(csuccess == 1);
 #endif
-    }
+    });
+    ECC_Stop();
 }
 
-static void VerifyNestedIfScript(benchmark::State& state) {
+static void VerifyNestedIfScript(benchmark::Bench& bench)
+{
     std::vector<std::vector<unsigned char>> stack;
     CScript script;
     for (int i = 0; i < 100; ++i) {
@@ -78,15 +88,13 @@ static void VerifyNestedIfScript(benchmark::State& state) {
     for (int i = 0; i < 100; ++i) {
         script << OP_ENDIF;
     }
-    while (state.KeepRunning()) {
+    bench.run([&] {
         auto stack_copy = stack;
         ScriptError error;
         bool ret = EvalScript(stack_copy, script, 0, BaseSignatureChecker(), SigVersion::BASE, &error);
         assert(ret);
-    }
+    });
 }
 
-
-BENCHMARK(VerifyScriptBench, 6300);
-
-BENCHMARK(VerifyNestedIfScript, 100);
+BENCHMARK(VerifyScriptBench);
+BENCHMARK(VerifyNestedIfScript);

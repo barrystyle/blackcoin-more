@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2019 The Bitcoin Core developers
+// Copyright (c) 2011-2020 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -23,12 +23,10 @@ static CBlock BuildBlockTestCase() {
     tx.vin[0].scriptSig.resize(10);
     tx.vout.resize(1);
     tx.vout[0].nValue = 42;
-    tx.nTime = 1649194574;
 
     block.vtx.resize(3);
     block.vtx[0] = MakeTransactionRef(tx);
     block.nVersion = 42;
-    block.nTime = tx.nTime;
     block.hashPrevBlock = InsecureRand256();
     block.nBits = 0x207fffff;
 
@@ -66,7 +64,7 @@ BOOST_AUTO_TEST_CASE(SimpleRoundTripTest)
 
     // Do a simple ShortTxIDs RT
     {
-        CBlockHeaderAndShortTxIDs shortIDs(block);
+        CBlockHeaderAndShortTxIDs shortIDs(block, true);
 
         CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
         stream << shortIDs;
@@ -115,9 +113,7 @@ class TestHeaderAndShortIDs {
 public:
     CBlockHeader header;
     uint64_t nonce;
-    std::vector<unsigned char> vchBlockSig;
     std::vector<uint64_t> shorttxids;
-    std::vector<unsigned char> vchBlockSig;
     std::vector<PrefilledTransaction> prefilledtxn;
 
     explicit TestHeaderAndShortIDs(const CBlockHeaderAndShortTxIDs& orig) {
@@ -126,7 +122,7 @@ public:
         stream >> *this;
     }
     explicit TestHeaderAndShortIDs(const CBlock& block) :
-        TestHeaderAndShortIDs(CBlockHeaderAndShortTxIDs(block)) {}
+        TestHeaderAndShortIDs(CBlockHeaderAndShortTxIDs(block, true)) {}
 
     uint64_t GetShortID(const uint256& txhash) const {
         CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
@@ -136,25 +132,7 @@ public:
         return base.GetShortID(txhash);
     }
 
-    ADD_SERIALIZE_METHODS;
-
-    template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action) {
-        READWRITE(header);
-        READWRITE(nonce);
-        READWRITE(vchBlockSig);
-        size_t shorttxids_size = shorttxids.size();
-        READWRITE(VARINT(shorttxids_size));
-        shorttxids.resize(shorttxids_size);
-        for (size_t i = 0; i < shorttxids.size(); i++) {
-            uint32_t lsb = shorttxids[i] & 0xffffffff;
-            uint16_t msb = (shorttxids[i] >> 32) & 0xffff;
-            READWRITE(lsb);
-            READWRITE(msb);
-            shorttxids[i] = (uint64_t(msb) << 32) | uint64_t(lsb);
-        }
-        READWRITE(prefilledtxn);
-    }
+    SERIALIZE_METHODS(TestHeaderAndShortIDs, obj) { READWRITE(obj.header, obj.nonce, Using<VectorFormatter<CustomUintFormatter<CBlockHeaderAndShortTxIDs::SHORTTXIDS_LENGTH>>>(obj.shorttxids), obj.prefilledtxn); }
 };
 
 BOOST_AUTO_TEST_CASE(NonCoinbasePreforwardRTTest)
@@ -301,7 +279,7 @@ BOOST_AUTO_TEST_CASE(EmptyBlockRoundTripTest)
 
     // Test simple header round-trip with only coinbase
     {
-        CBlockHeaderAndShortTxIDs shortIDs(block);
+        CBlockHeaderAndShortTxIDs shortIDs(block, false);
 
         CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
         stream << shortIDs;

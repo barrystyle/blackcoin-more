@@ -5,12 +5,13 @@
 #ifndef BITCOIN_WALLET_COINCONTROL_H
 #define BITCOIN_WALLET_COINCONTROL_H
 
-#include <optional.h>
 #include <outputtype.h>
 #include <policy/feerate.h>
 #include <policy/fees.h>
 #include <primitives/transaction.h>
 #include <script/standard.h>
+
+#include <optional>
 
 const int DEFAULT_MIN_DEPTH = 0;
 const int DEFAULT_MAX_DEPTH = 9999999;
@@ -23,32 +24,31 @@ class CCoinControl
 {
 public:
     //! Custom change destination, if not set an address is generated
-    CTxDestination destChange;
+    CTxDestination destChange = CNoDestination();
     //! Override the default change type if set, ignored if destChange is set
-    Optional<OutputType> m_change_type;
+    std::optional<OutputType> m_change_type;
+    //! If false, only selected inputs are used
+    bool m_add_inputs = true;
+    //! If false, only safe inputs will be used
+    bool m_include_unsafe_inputs = false;
     //! If false, allows unselected inputs, but requires all selected inputs be used
-    bool fAllowOtherInputs;
+    bool fAllowOtherInputs = false;
     //! Includes watch only addresses which are solvable
-    bool fAllowWatchOnly;
+    bool fAllowWatchOnly = false;
     //! Override automatic min/max checks on fee, m_feerate must be set if true
-    bool fOverrideFeeRate;
+    bool fOverrideFeeRate = false;
     //! Override the wallet's m_pay_tx_fee if set
-    Optional<CFeeRate> m_feerate;
+    std::optional<CFeeRate> m_feerate;
     //! Avoid partial use of funds sent to a given address
-    bool m_avoid_partial_spends;
+    bool m_avoid_partial_spends = DEFAULT_AVOIDPARTIALSPENDS;
     //! Forbids inclusion of dirty (previously used) addresses
-    bool m_avoid_address_reuse;
+    bool m_avoid_address_reuse = false;
     //! Minimum chain depth value for coin availability
     int m_min_depth = DEFAULT_MIN_DEPTH;
     //! Maximum chain depth value for coin availability
     int m_max_depth = DEFAULT_MAX_DEPTH;
 
-    CCoinControl()
-    {
-        SetNull();
-    }
-
-    void SetNull();
+    CCoinControl();
 
     bool HasSelected() const
     {

@@ -14,6 +14,7 @@ BITCOIND=${BITCOIND:-$BINDIR/blackmored}
 BITCOINCLI=${BITCOINCLI:-$BINDIR/blackmore-cli}
 BITCOINTX=${BITCOINTX:-$BINDIR/blackmore-tx}
 WALLET_TOOL=${WALLET_TOOL:-$BINDIR/blackmore-wallet}
+BITCOINUTIL=${BITCOINQT:-$BINDIR/blackmore-util}
 BITCOINQT=${BITCOINQT:-$BINDIR/qt/blackmore-qt}
 
 [ ! -x $BITCOIND ] && echo "$BITCOIND not found or not executable." && exit 1
@@ -43,7 +44,7 @@ read -r -a BTCVER <<< "$($BITCOINCLI --version | head -n1 | awk -F'[ -]' '{ prin
 echo "[COPYRIGHT]" > footer.h2m
 $BITCOIND --version | sed -n '1!p' >> footer.h2m
 
-for cmd in $BITCOIND $BITCOINCLI $BITCOINTX $WALLET_TOOL $BITCOINQT; do
+for cmd in $BITCOIND $BITCOINCLI $BITCOINTX $WALLET_TOOL $BITCOINUTIL $BITCOINQT; do
   cmdname="${cmd##*/}"
   help2man -N --version-string=${BTCVER[0]} --include=footer.h2m -o ${MANDIR}/${cmdname}.1 ${cmd}
 done
