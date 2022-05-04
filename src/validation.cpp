@@ -964,16 +964,12 @@ CTransactionRef GetTransaction(const CBlockIndex* const block_index, const CTxMe
     return nullptr;
 }
 
-// Blackcoin
-int64_t FutureDrift(int64_t nTime)
+CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams)
 {
-    // loose policy for FutureDrift in regtest mode
-    if (Params().GetConsensus().fPowNoRetargeting && ::ChainActive().Height() <= Params().GetConsensus().nLastPOWBlock) {
-             return nTime + 24 * 60 * 60;
-    }
-    return Params().GetConsensus().IsProtocolV2(nTime) ? nTime + 15 : nTime + 10 * 60;
+    return GetProofOfWorkSubsidy();
 }
 
+// Blackcoin
 CAmount GetProofOfWorkSubsidy()
 {
     return 10000 * COIN;
@@ -982,6 +978,15 @@ CAmount GetProofOfWorkSubsidy()
 CAmount GetProofOfStakeSubsidy()
 {
     return COIN * 3 / 2;
+}
+
+int64_t FutureDrift(int64_t nTime)
+{
+    // loose policy for FutureDrift in regtest mode
+    if (Params().GetConsensus().fPowNoRetargeting && ::ChainActive().Height() <= Params().GetConsensus().nLastPOWBlock) {
+             return nTime + 24 * 60 * 60;
+    }
+    return Params().GetConsensus().IsProtocolV2(nTime) ? nTime + 15 : nTime + 10 * 60;
 }
 
 CoinsViews::CoinsViews(

@@ -18,7 +18,7 @@ namespace Consensus {
  */
 enum BuriedDeployment : int16_t {
     // buried deployments get negative values to avoid overlap with DeploymentPos
-    DEPLOYMENT_CSV,
+    DEPLOYMENT_CSV = std::numeric_limits<int16_t>::min(),
 };
 constexpr bool ValidDeployment(BuriedDeployment dep) { return dep <= DEPLOYMENT_CSV; }
 
