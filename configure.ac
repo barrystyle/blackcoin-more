@@ -291,7 +291,7 @@ AC_ARG_WITH([mpgen],
 
 AC_ARG_ENABLE([multiprocess],
   [AS_HELP_STRING([--enable-multiprocess],
-  [build multiprocess bitcoin-node, bitcoin-wallet, and bitcoin-gui executables in addition to monolithic bitcoind and bitcoin-qt executables. Requires libmultiprocess library. Experimental (default is no)])],
+  [build multiprocess blackmore-node, blackmore-wallet, and blackmore-gui executables in addition to monolithic blackmored and blackmore-qt executables. Requires libmultiprocess library. Experimental (default is no)])],
   [enable_multiprocess=$enableval],
   [enable_multiprocess=no])
 
@@ -453,7 +453,7 @@ if test "x$CXXFLAGS_overridden" = "xno"; then
   AX_CHECK_COMPILE_FLAG([-Wswitch],[WARN_CXXFLAGS="$WARN_CXXFLAGS -Wswitch"],,[[$CXXFLAG_WERROR]])
   AX_CHECK_COMPILE_FLAG([-Wthread-safety],[WARN_CXXFLAGS="$WARN_CXXFLAGS -Wthread-safety"],,[[$CXXFLAG_WERROR]])
   AX_CHECK_COMPILE_FLAG([-Wrange-loop-analysis],[WARN_CXXFLAGS="$WARN_CXXFLAGS -Wrange-loop-analysis"],,[[$CXXFLAG_WERROR]])
-  dnl X_CHECK_COMPILE_FLAG([-Wredundant-decls],[WARN_CXXFLAGS="$WARN_CXXFLAGS -Wredundant-decls"],,[[$CXXFLAG_WERROR]])
+  AX_CHECK_COMPILE_FLAG([-Wredundant-decls],[WARN_CXXFLAGS="$WARN_CXXFLAGS -Wredundant-decls"],,[[$CXXFLAG_WERROR]])
   AX_CHECK_COMPILE_FLAG([-Wunused-variable],[WARN_CXXFLAGS="$WARN_CXXFLAGS -Wunused-variable"],,[[$CXXFLAG_WERROR]])
   AX_CHECK_COMPILE_FLAG([-Wunused-member-function],[WARN_CXXFLAGS="$WARN_CXXFLAGS -Wunused-member-function"],,[[$CXXFLAG_WERROR]])
   AX_CHECK_COMPILE_FLAG([-Wdate-time],[WARN_CXXFLAGS="$WARN_CXXFLAGS -Wdate-time"],,[[$CXXFLAG_WERROR]])
@@ -624,7 +624,7 @@ AC_ARG_ENABLE([util-wallet],
 
 AC_ARG_ENABLE([util-util],
   [AS_HELP_STRING([--enable-util-util],
-  [build bitcoin-util])],
+  [build blackmore-util])],
   [build_bitcoin_util=$enableval],
   [build_bitcoin_util=$build_bitcoin_utils])
 
@@ -641,7 +641,6 @@ AC_ARG_WITH([daemon],
   [build_bitcoind=yes])
 
 pkg_openssl=yes
-use_pkgconfig=yes
 case $host in
   *mingw*)
      TARGET_OS=windows
@@ -674,7 +673,7 @@ case $host in
        AC_MSG_ERROR("windres not found")
      fi
 
-     CPPFLAGS="$CPPFLAGS -D_MT -DWIN32 -D_WINDOWS -D_WIN32_WINNT=0x0601 -D_WIN32_IE=0x0501 -DWIN32_LEAN_AND_MEAN"
+     CPPFLAGS="$CPPFLAGS -D_MT -DWIN32 -D_WINDOWS -DBOOST_THREAD_USE_LIB -D_WIN32_WINNT=0x0601 -D_WIN32_IE=0x0501 -DWIN32_LEAN_AND_MEAN"
 
      dnl libtool insists upon adding -nostdlib and a list of objects/libs to link against.
      dnl That breaks our ability to build dll's with static libgcc/libstdc++/libssp. Override
@@ -712,10 +711,13 @@ case $host in
          dnl the user (--without-wallet or --without-gui for example).
 
          openssl_prefix=`$BREW --prefix openssl 2>/dev/null`
+         bdb_prefix=$($BREW --prefix berkeley-db62 2>/dev/null)
+         qt5_prefix=$($BREW --prefix qt5 2>/dev/null)
          if test x$openssl_prefix != x; then
            PKG_CONFIG_PATH="$openssl_prefix/lib/pkgconfig:$PKG_CONFIG_PATH"
            export PKG_CONFIG_PATH
          fi
+
          if test "x$use_bdb" != xno && $BREW list --versions berkeley-db62 >/dev/null && test "x$BDB_CFLAGS" = "x" && test "x$BDB_LIBS" = "x"; then
            bdb_prefix=$($BREW --prefix berkeley-db62 2>/dev/null)
            dnl This must precede the call to BITCOIN_FIND_BDB48 below.
@@ -1340,8 +1342,6 @@ else
   CPPFLAGS="$CPPFLAGS -DPROVIDE_FUZZ_MAIN_FUNCTION"
 fi
 
-dnl sets $bitcoin_enable_qt, $bitcoin_enable_qt_test, $bitcoin_enable_qt_dbus
-BITCOIN_QT_CONFIGURE([$use_pkgconfig], [qt5])
 if test x$enable_wallet != xno; then
     dnl Check for libdb_cxx only if wallet enabled
     if test "x$use_bdb" != "xno"; then
@@ -1443,12 +1443,16 @@ if test x$use_boost = xyes; then
   fi
   AX_BOOST_SYSTEM
   AX_BOOST_FILESYSTEM
+  AX_BOOST_PROGRAM_OPTIONS
+  AX_BOOST_THREAD
+  AX_BOOST_RANDOM
+  AX_BOOST_CHRONO
 
   if test x$suppress_external_warnings != xno; then
     BOOST_CPPFLAGS=SUPPRESS_WARNINGS($BOOST_CPPFLAGS)
   fi
 
-  BOOST_LIBS="$BOOST_LDFLAGS $BOOST_SYSTEM_LIB $BOOST_FILESYSTEM_LIB"
+  BOOST_LIBS="$BOOST_LDFLAGS $BOOST_SYSTEM_LIB $BOOST_FILESYSTEM_LIB $BOOST_PROGRAM_OPTIONS_LIB $BOOST_THREAD_LIB $BOOST_CHRONO_LIB $BOOST_RANDOM_LIB"
 fi
 
 if test "x$use_external_signer" != xno; then
@@ -1507,12 +1511,8 @@ if test x$build_bitcoin_cli$build_bitcoind$bitcoin_enable_qt$use_tests$use_bench
   fi
 fi
 
-if test "x$pkg_openssl" = xyes; then
-  PKG_CHECK_MODULES([SSL], [libssl],, [AC_MSG_ERROR(openssl not found.)])
-  PKG_CHECK_MODULES([CRYPTO], [libcrypto],,[AC_MSG_ERROR(libcrypto not found.)])
-else
-  AC_CHECK_HEADER([openssl/crypto.h],,AC_MSG_ERROR(libcrypto headers missing))
-  AC_CHECK_LIB([crypto],      [main],CRYPTO_LIBS=-lcrypto, AC_MSG_ERROR(libcrypto missing))
+PKG_CHECK_MODULES([SSL], [libssl],, [AC_MSG_ERROR(openssl not found.)])
+PKG_CHECK_MODULES([CRYPTO], [libcrypto],,[AC_MSG_ERROR(libcrypto not found.)])
 
 dnl QR Code encoding library check
 
@@ -1637,7 +1637,7 @@ AC_MSG_CHECKING([whether to build blackmored-wallet])
 AM_CONDITIONAL([BUILD_BITCOIN_WALLET], [test x$build_bitcoin_wallet = xyes])
 AC_MSG_RESULT($build_bitcoin_wallet)
 
-AC_MSG_CHECKING([whether to build bitcoin-util])
+AC_MSG_CHECKING([whether to build blackmore-util])
 AM_CONDITIONAL([BUILD_BITCOIN_UTIL], [test x$build_bitcoin_util = xyes])
 AC_MSG_RESULT($build_bitcoin_util)
 
@@ -1901,9 +1901,10 @@ AC_SUBST(SQLITE_LIBS)
 AC_SUBST(TESTDEFS)
 AC_SUBST(MINIUPNPC_CPPFLAGS)
 AC_SUBST(MINIUPNPC_LIBS)
-AC_SUBST(CRYPTO_LIBS)
 AC_SUBST(NATPMP_CPPFLAGS)
 AC_SUBST(NATPMP_LIBS)
+AC_SUBST(CRYPTO_LIBS)
+AC_SUBST(SSL_LIBS)
 AC_SUBST(EVENT_LIBS)
 AC_SUBST(EVENT_PTHREADS_LIBS)
 AC_SUBST(ZMQ_LIBS)
@@ -1957,7 +1958,7 @@ if test x$need_bundled_univalue = xyes; then
   AC_CONFIG_SUBDIRS([src/univalue])
 fi
 
-ac_configure_args="${ac_configure_args} --disable-shared --with-pic --enable-benchmark=no --enable-module-recovery --enable-module-schnorrsig --enable-experimental --disable-openssl-tests"
+ac_configure_args="${ac_configure_args} --disable-shared --with-pic --enable-benchmark=no --enable-module-recovery --enable-module-schnorrsig --enable-experimental --enable-module-ecdh"
 AC_CONFIG_SUBDIRS([src/secp256k1])
 
 AC_OUTPUT

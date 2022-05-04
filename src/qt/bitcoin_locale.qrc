@@ -7,7 +7,6 @@
         <file alias="bg">locale/bitcoin_bg.qm</file>
         <file alias="bs">locale/bitcoin_bs.qm</file>
         <file alias="ca">locale/bitcoin_ca.qm</file>
-        <file alias="cmn">locale/bitcoin_cmn.qm</file>
         <file alias="cs">locale/bitcoin_cs.qm</file>
         <file alias="cy">locale/bitcoin_cy.qm</file>
         <file alias="da">locale/bitcoin_da.qm</file>
@@ -90,6 +89,5 @@
         <file alias="zh_CN">locale/bitcoin_zh_CN.qm</file>
         <file alias="zh_HK">locale/bitcoin_zh_HK.qm</file>
         <file alias="zh_TW">locale/bitcoin_zh_TW.qm</file>
-        <file alias="zu">locale/bitcoin_zu.qm</file>
     </qresource>
 </RCC>

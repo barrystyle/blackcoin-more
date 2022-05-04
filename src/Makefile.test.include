@@ -7,11 +7,11 @@ noinst_PROGRAMS += test/fuzz/fuzz
 endif
 
 if !ENABLE_FUZZ
-bin_PROGRAMS += test/test_bitcoin
+bin_PROGRAMS += test/test_blackmore
 endif
 
 TEST_SRCDIR = test
-TEST_BINARY=test/test_bitcoin$(EXEEXT)
+TEST_BINARY=test/test_blackmore$(EXEEXT)
 FUZZ_BINARY=test/fuzz/fuzz$(EXEEXT)
 
 JSON_TEST_FILES = \
@@ -48,10 +48,11 @@ FUZZ_SUITE_LD_COMMON = \
  $(LIBLEVELDB) \
  $(LIBLEVELDB_SSE42) \
  $(BOOST_LIBS) \
+ $(SSL_LIBS) \
+ $(CRYPTO_LIBS) \
  $(LIBMEMENV) \
  $(LIBSECP256K1) \
  $(EVENT_LIBS) \
- $(CRYPTO_LIBS) \
  $(EVENT_PTHREADS_LIBS)
 
 if USE_UPNP
@@ -166,7 +167,6 @@ if USE_BDB
 BITCOIN_TESTS += wallet/test/db_tests.cpp
 endif
 
-
 BITCOIN_TEST_SUITE += \
   wallet/test/wallet_test_fixture.cpp \
   wallet/test/wallet_test_fixture.h \
@@ -175,17 +175,17 @@ BITCOIN_TEST_SUITE += \
 endif
 
 test_test_blackmore_SOURCES = $(BITCOIN_TEST_SUITE) $(BITCOIN_TESTS) $(JSON_TEST_FILES) $(RAW_TEST_FILES)
-test_test_blackmore_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(TESTDEFS) $(EVENT_CFLAGS)
+test_test_blackmore_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) -I$(srcdir)/test/ $(TESTDEFS) $(EVENT_CFLAGS)
 test_test_blackmore_LDADD = $(LIBTEST_UTIL)
 if ENABLE_WALLET
 test_test_blackmore_LDADD += $(LIBBITCOIN_WALLET)
 endif
 
 test_test_blackmore_LDADD += $(LIBBITCOIN_SERVER) $(LIBBITCOIN_CLI) $(LIBBITCOIN_COMMON) $(LIBBITCOIN_UTIL) $(LIBBITCOIN_CONSENSUS) $(LIBBITCOIN_CRYPTO) $(LIBUNIVALUE) \
-  $(LIBLEVELDB) $(LIBLEVELDB_SSE42) $(LIBMEMENV) $(BOOST_LIBS) $(BOOST_UNIT_TEST_FRAMEWORK_LIB) $(LIBSECP256K1) $(EVENT_LIBS) $(EVENT_PTHREADS_LIBS)
+  $(LIBLEVELDB) $(LIBLEVELDB_SSE42) $(LIBMEMENV) $(BOOST_LIBS) $(BOOST_UNIT_TEST_FRAMEWORK_LIB) $(LIBSECP256K1) $(EVENT_LIBS) $(EVENT_PTHREADS_LIBS) $(LIBSECP256K1)
 test_test_blackmore_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
-test_test_blackmore_LDADD += $(BDB_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(NATPMP_LIBS) $(SQLITE_LIBS)
+test_test_blackmore_LDADD += $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(NATPMP_LIBS) $(SQLITE_LIBS)
 test_test_blackmore_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) $(PTHREAD_FLAGS) -static
 
 if ENABLE_ZMQ
