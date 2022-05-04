@@ -199,6 +199,8 @@ void TxToUniv(const CTransaction& tx, const uint256& hashBlock, bool include_add
     entry.pushKV("version", static_cast<int64_t>(static_cast<uint32_t>(tx.nVersion)));
     entry.pushKV("time", (int64_t)tx.nTime);
     entry.pushKV("size", (int)::GetSerializeSize(tx, PROTOCOL_VERSION));
+    entry.pushKV("vsize", (GetTransactionWeight(tx) + WITNESS_SCALE_FACTOR - 1) / WITNESS_SCALE_FACTOR);
+    entry.pushKV("weight", GetTransactionWeight(tx));
     entry.pushKV("locktime", (int64_t)tx.nLockTime);
 
     UniValue vin{UniValue::VARR};
@@ -221,6 +223,13 @@ void TxToUniv(const CTransaction& tx, const uint256& hashBlock, bool include_add
             o.pushKV("asm", ScriptToAsmStr(txin.scriptSig, true));
             o.pushKV("hex", HexStr(txin.scriptSig));
             in.pushKV("scriptSig", o);
+        }
+        if (!tx.vin[i].scriptWitness.IsNull()) {
+            UniValue txinwitness(UniValue::VARR);
+            for (const auto& item : tx.vin[i].scriptWitness.stack) {
+                txinwitness.push_back(HexStr(item));
+            }
+            in.pushKV("txinwitness", txinwitness);
         }
         if (calculate_fee) {
             const CTxOut& prev_txout = txundo->vprevout[i].out;

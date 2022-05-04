@@ -16,18 +16,18 @@
 class CCoinsViewCache;
 class CTxOut;
 
-/** Default for -blockmaxsize, which controls the maximum size of block the mining code will create **/
-static const unsigned int DEFAULT_BLOCK_MAX_SIZE = 750000;
+/** Default for -blockmaxweight, which controls the range of block weights the mining code will create **/
+static const unsigned int DEFAULT_BLOCK_MAX_WEIGHT = MAX_BLOCK_WEIGHT - 4000;
 /** Default for -blockmintxfee, which sets the minimum feerate for a transaction in blocks created by mining code **/
-static const unsigned int DEFAULT_BLOCK_MIN_TX_FEE = 10000;
-/** The maximum size for transactions we're willing to relay/mine */
-static const unsigned int MAX_STANDARD_TX_SIZE = 100000;
-/** The minimum size for transactions we're willing to relay/mine */
-static const unsigned int MIN_STANDARD_TX_SIZE = 82;
+static const unsigned int DEFAULT_BLOCK_MIN_TX_FEE = 1000;
+/** The maximum weight for transactions we're willing to relay/mine */
+static const unsigned int MAX_STANDARD_TX_WEIGHT = 400000;
+/** The minimum non-witness size for transactions we're willing to relay/mine (1 segwit input + 1 P2WPKH output = 82 bytes) */
+static const unsigned int MIN_STANDARD_TX_NONWITNESS_SIZE = 82;
 /** Maximum number of signature check operations in an IsStandard() P2SH script */
 static const unsigned int MAX_P2SH_SIGOPS = 15;
 /** The maximum number of sigops we're willing to relay/mine in a single tx */
-static const unsigned int MAX_STANDARD_TX_SIGOPS = MAX_BLOCK_SIGOPS_LEGACY/5;
+static const unsigned int MAX_STANDARD_TX_SIGOPS_COST = MAX_BLOCK_SIGOPS_COST/5;
 /** Default for -maxmempool, maximum megabytes of mempool memory usage */
 static const unsigned int DEFAULT_MAX_MEMPOOL_SIZE = 300;
 /** Default for -bytespersigop */
@@ -112,10 +112,10 @@ bool AreInputsStandard(const CTransaction& tx, const CCoinsViewCache& mapInputs,
 */
 bool IsWitnessStandard(const CTransaction& tx, const CCoinsViewCache& mapInputs);
 
-/** Compute the virtual transaction size (size, or more if sigops are too dense). */
-int64_t GetVirtualTransactionSize(int64_t nSize, int64_t nSigOpCount, unsigned int bytes_per_sigop);
-int64_t GetVirtualTransactionSize(const CTransaction& tx, int64_t nSigOpCount, unsigned int bytes_per_sigop);
-int64_t GetVirtualTransactionInputSize(const CTxIn& tx, int64_t nSigOpCount, unsigned int bytes_per_sigop);
+/** Compute the virtual transaction size (weight reinterpreted as bytes). */
+int64_t GetVirtualTransactionSize(int64_t nWeight, int64_t nSigOpCost, unsigned int bytes_per_sigop);
+int64_t GetVirtualTransactionSize(const CTransaction& tx, int64_t nSigOpCost, unsigned int bytes_per_sigop);
+int64_t GetVirtualTransactionInputSize(const CTxIn& tx, int64_t nSigOpCost, unsigned int bytes_per_sigop);
 
 static inline int64_t GetVirtualTransactionSize(const CTransaction& tx)
 {

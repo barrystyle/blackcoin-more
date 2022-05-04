@@ -260,8 +260,8 @@ void CCoinsViewCache::ReallocateCache()
     ::new (&cacheCoins) CCoinsMap();
 }
 
-static const size_t MIN_TRANSACTION_OUTPUT_SIZE = ::GetSerializeSize(CTxOut(), PROTOCOL_VERSION);
-static const size_t MAX_OUTPUTS_PER_BLOCK = MAX_BLOCK_SIZE / MIN_TRANSACTION_OUTPUT_SIZE;
+static const size_t MIN_TRANSACTION_OUTPUT_WEIGHT = WITNESS_SCALE_FACTOR * ::GetSerializeSize(CTxOut(), PROTOCOL_VERSION);
+static const size_t MAX_OUTPUTS_PER_BLOCK = MAX_BLOCK_WEIGHT / MIN_TRANSACTION_OUTPUT_WEIGHT;
 
 const Coin& AccessByTxid(const CCoinsViewCache& view, const uint256& txid)
 {

@@ -863,7 +863,13 @@ static RPCHelpMan getblocktemplate()
 
         int index_in_template = i - 1;
         entry.pushKV("fee", pblocktemplate->vTxFees[index_in_template]);
-        entry.pushKV("sigops", pblocktemplate->vTxSigOpsCount[index_in_template]);
+        int64_t nTxSigOps = pblocktemplate->vTxSigOpsCost[index_in_template];
+        if (fPreSegWit) {
+            CHECK_NONFATAL(nTxSigOps % WITNESS_SCALE_FACTOR == 0);
+            nTxSigOps /= WITNESS_SCALE_FACTOR;
+        }
+        entry.pushKV("sigops", nTxSigOps);
+        entry.pushKV("weight", GetTransactionWeight(tx));
 
         transactions.push_back(entry);
     }
@@ -952,8 +958,19 @@ static RPCHelpMan getblocktemplate()
     result.pushKV("mintime", (int64_t)pindexPrev->GetMedianTimePast()+1);
     result.pushKV("mutable", aMutable);
     result.pushKV("noncerange", "00000000ffffffff");
-    result.pushKV("sigoplimit", (int64_t)MAX_BLOCK_SIGOPS_COST);
-    result.pushKV("sizelimit", (int64_t)MAX_BLOCK_SIZE);
+    int64_t nSigOpLimit = MAX_BLOCK_SIGOPS_COST;
+    int64_t nSizeLimit = MAX_BLOCK_SERIALIZED_SIZE;
+    if (fPreSegWit) {
+        CHECK_NONFATAL(nSigOpLimit % WITNESS_SCALE_FACTOR == 0);
+        nSigOpLimit /= WITNESS_SCALE_FACTOR;
+        CHECK_NONFATAL(nSizeLimit % WITNESS_SCALE_FACTOR == 0);
+        nSizeLimit /= WITNESS_SCALE_FACTOR;
+    }
+    result.pushKV("sigoplimit", nSigOpLimit);
+    result.pushKV("sizelimit", nSizeLimit);
+    if (!fPreSegWit) {
+        result.pushKV("weightlimit", (int64_t)MAX_BLOCK_WEIGHT);
+    }
     result.pushKV("curtime", pblock->GetBlockTime());
     result.pushKV("bits", strprintf("%08x", pblock->nBits));
     result.pushKV("height", (int64_t)(pindexPrev->nHeight+1));

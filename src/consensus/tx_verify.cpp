@@ -7,10 +7,7 @@
 #include <consensus/consensus.h>
 #include <primitives/transaction.h>
 #include <script/interpreter.h>
-#include <script/standard.h>
 #include <consensus/validation.h>
-#include <validation.h>
-#include <wallet/wallet.h>
 
 // TODO remove the following dependencies
 #include <chain.h>
@@ -116,7 +113,7 @@ bool SequenceLocks(const CTransaction &tx, int flags, std::vector<int>& prevHeig
     return EvaluateSequenceLocks(block, CalculateSequenceLocks(tx, flags, prevHeights, block));
 }
 
-unsigned int GetSigOpCountWithoutP2SH(const CTransaction& tx)
+unsigned int GetLegacySigOpCount(const CTransaction& tx)
 {
     unsigned int nSigOps = 0;
     for (const auto& txin : tx.vin)
@@ -147,18 +144,24 @@ unsigned int GetP2SHSigOpCount(const CTransaction& tx, const CCoinsViewCache& in
     return nSigOps;
 }
 
-int64_t GetTransactionSigOpCount(const CTransaction& tx, const CCoinsViewCache& inputs, int flags)
+int64_t GetTransactionSigOpCost(const CTransaction& tx, const CCoinsViewCache& inputs, int flags)
 {
-    int64_t nSigOps = GetSigOpCountWithoutP2SH(tx);
-    
-    if (tx.IsCoinBase()) {
+    int64_t nSigOps = GetLegacySigOpCount(tx) * WITNESS_SCALE_FACTOR;
+
+    if (tx.IsCoinBase())
         return nSigOps;
-    }
 
     if (flags & SCRIPT_VERIFY_P2SH) {
-        nSigOps += GetP2SHSigOpCount(tx, inputs);
+        nSigOps += GetP2SHSigOpCount(tx, inputs) * WITNESS_SCALE_FACTOR;
     }
 
+    for (unsigned int i = 0; i < tx.vin.size(); i++)
+    {
+        const Coin& coin = inputs.AccessCoin(tx.vin[i].prevout);
+        assert(!coin.IsSpent());
+        const CTxOut &prevout = coin.out;
+        nSigOps += CountWitnessSigOps(tx.vin[i].scriptSig, prevout.scriptPubKey, &tx.vin[i].scriptWitness, flags);
+    }
     return nSigOps;
 }
 

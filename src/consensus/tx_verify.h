@@ -34,7 +34,7 @@ namespace Consensus {
  * @return number of sigops this transaction's outputs will produce when spent
  * @see CTransaction::FetchInputs
  */
-unsigned int GetSigOpCountWithoutP2SH(const CTransaction& tx);
+unsigned int GetLegacySigOpCount(const CTransaction& tx);
 
 /**
  * Count ECDSA signature operations in pay-to-script-hash inputs.
@@ -52,7 +52,7 @@ unsigned int GetP2SHSigOpCount(const CTransaction& tx, const CCoinsViewCache& ma
  * @param[out] flags Script verification flags
  * @return Total signature operation cost of tx
  */
-int64_t GetTransactionSigOpCount(const CTransaction& tx, const CCoinsViewCache& inputs, int flags);
+int64_t GetTransactionSigOpCost(const CTransaction& tx, const CCoinsViewCache& inputs, int flags);
 
 /**
  * Check if transaction is final and can be included in a block with the
@@ -74,9 +74,5 @@ bool EvaluateSequenceLocks(const CBlockIndex& block, std::pair<int, int64_t> loc
  * Consensus critical. Takes as input a list of heights at which tx's inputs (in order) confirmed.
  */
 bool SequenceLocks(const CTransaction &tx, int flags, std::vector<int>& prevHeights, const CBlockIndex& block);
-
-// peercoin: minimum fee for transaction to be accepted in a blockchain.
-CAmount GetMinFee(const CTransaction& tx, unsigned int nTimeTx);
-CAmount GetMinFee(size_t nBytes, uint32_t nTime);
 
 #endif // BITCOIN_CONSENSUS_TX_VERIFY_H

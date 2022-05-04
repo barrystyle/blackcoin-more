@@ -22,7 +22,6 @@
 #include <timedata.h>
 #include <util/moneystr.h>
 #include <util/system.h>
-#include <net.h>
 #ifdef ENABLE_WALLET
 #include <wallet/wallet.h>
 #endif
@@ -70,7 +69,7 @@ void RegenerateCommitments(CBlock& block, ChainstateManager& chainman)
 
 BlockAssembler::Options::Options() {
     blockMinFeeRate = CFeeRate(DEFAULT_BLOCK_MIN_TX_FEE);
-    nBlockMaxSize = DEFAULT_BLOCK_MAX_SIZE;
+    nBlockMaxWeight = DEFAULT_BLOCK_MAX_WEIGHT;
 }
 
 BlockAssembler::BlockAssembler(CChainState& chainstate, const CTxMemPool& mempool, const CChainParams& params, const Options& options)
@@ -79,16 +78,16 @@ BlockAssembler::BlockAssembler(CChainState& chainstate, const CTxMemPool& mempoo
       m_chainstate(chainstate)
 {
     blockMinFeeRate = options.blockMinFeeRate;
-    // Limit size to between 1K and MAX_BLOCK_SIZE-1K for sanity:
-    nBlockMaxSize = std::max<size_t>(1000, std::min<size_t>(MAX_BLOCK_SIZE - 1000, options.nBlockMaxSize));
+    // Limit weight to between 4K and MAX_BLOCK_WEIGHT-4K for sanity:
+    nBlockMaxWeight = std::max<size_t>(4000, std::min<size_t>(MAX_BLOCK_WEIGHT - 4000, options.nBlockMaxWeight));
 }
 
 static BlockAssembler::Options DefaultOptions()
 {
     // Block resource limits
-    // If -blockmaxsize is not given, limit to DEFAULT_BLOCK_MAX_SIZE
+    // If -blockmaxweight is not given, limit to DEFAULT_BLOCK_MAX_WEIGHT
     BlockAssembler::Options options;
-    options.nBlockMaxSize = gArgs.GetArg("-blockmaxsize", DEFAULT_BLOCK_MAX_SIZE);
+    options.nBlockMaxWeight = gArgs.GetArg("-blockmaxweight", DEFAULT_BLOCK_MAX_WEIGHT);
     CAmount n = 0;
     if (gArgs.IsArgSet("-blockmintxfee") && ParseMoney(gArgs.GetArg("-blockmintxfee", ""), n)) {
         options.blockMinFeeRate = CFeeRate(n);
@@ -106,8 +105,9 @@ void BlockAssembler::resetBlock()
     inBlock.clear();
 
     // Reserve space for coinbase tx
-    nBlockSize = 1000;
-    nBlockSigOps = 100;
+    nBlockWeight = 4000;
+    nBlockSigOpsCost = 400;
+    fIncludeWitness = false;
 
     // These counters do not include coinbase tx
     nBlockTx = 0;
@@ -129,7 +129,7 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     // Add dummy coinbase tx as first transaction
     pblock->vtx.emplace_back();
     pblocktemplate->vTxFees.push_back(-1); // updated at end
-    pblocktemplate->vTxSigOpsCount.push_back(-1); // updated at end
+    pblocktemplate->vTxSigOpsCost.push_back(-1); // updated at end
 
 #ifdef ENABLE_WALLET
     if (pwallet && pwallet->IsStakeClosing())
@@ -148,10 +148,10 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
         pblock->nVersion = gArgs.GetArg("-blockversion", pblock->nVersion);
 
     pblock->nTime = GetAdjustedTime();
-    const int64_t nGetMedianTimePast = pindexPrev->GetMedianTimePast();
+    const int64_t nMedianTimePast = pindexPrev->GetMedianTimePast();
 
     nLockTimeCutoff = (STANDARD_LOCKTIME_VERIFY_FLAGS & LOCKTIME_MEDIAN_TIME_PAST)
-                       ? nGetMedianTimePast
+                       ? nMedianTimePast
                        : pblock->GetBlockTime();
 
     // Decide whether to include witness transactions
@@ -189,6 +189,7 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     }
     coinbaseTx.vin[0].scriptSig = CScript() << nHeight << OP_0;
     pblock->vtx[0] = MakeTransactionRef(std::move(coinbaseTx));
+    pblocktemplate->vchCoinbaseCommitment = GenerateCoinbaseCommitment(*pblock, pindexPrev, chainparams.GetConsensus());
     pblocktemplate->vTxFees[0] = -nFees;
 
     // Blackcoin: avoid log spamming
@@ -204,7 +205,7 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
         UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
     pblock->nBits          = GetNextTargetRequired(pindexPrev, chainparams.GetConsensus(), fProofOfStake);
     pblock->nNonce         = 0;
-    pblocktemplate->vTxSigOpsCount[0] = GetSigOpCountWithoutP2SH(*pblock->vtx[0]);
+    pblocktemplate->vTxSigOpsCost[0] = WITNESS_SCALE_FACTOR * GetLegacySigOpCount(*pblock->vtx[0]);
 
     BlockValidationState state;
     if (!fProofOfStake && !TestBlockValidity(state, chainparams, m_chainstate, *pblock, pindexPrev, false, false, true)) {
@@ -230,12 +231,12 @@ void BlockAssembler::onlyUnconfirmed(CTxMemPool::setEntries& testSet)
     }
 }
 
-bool BlockAssembler::TestPackage(uint64_t packageSize, int64_t packageSigOps) const
+bool BlockAssembler::TestPackage(uint64_t packageSize, int64_t packageSigOpsCost) const
 {
-    auto blockSizeWithPackage = nBlockSize + packageSize;
-    if (blockSizeWithPackage >= DEFAULT_BLOCK_MAX_SIZE)
+    // TODO: switch to weight-based accounting for packages instead of vsize-based accounting.
+    if (nBlockWeight + WITNESS_SCALE_FACTOR * packageSize >= nBlockMaxWeight)
         return false;
-    if (nBlockSigOps + packageSigOps >= MAX_BLOCK_SIGOPS)
+    if (nBlockSigOpsCost + packageSigOpsCost >= MAX_BLOCK_SIGOPS_COST)
         return false;
     return true;
 }
@@ -246,14 +247,11 @@ bool BlockAssembler::TestPackage(uint64_t packageSize, int64_t packageSigOps) co
 //   segwit activation)
 bool BlockAssembler::TestPackageTransactions(const CTxMemPool::setEntries& package) const
 {
-    uint64_t nPotentialBlockSize = nBlockSize;
     for (CTxMemPool::txiter it : package) {
         if (!IsFinalTx(it->GetTx(), nHeight, nLockTimeCutoff))
             return false;
-        uint64_t nTxSize = ::GetSerializeSize(it->GetTx(), PROTOCOL_VERSION);
-        if (nPotentialBlockSize + nTxSize >= nBlockMaxSize)
+        if (!fIncludeWitness && it->GetTx().HasWitness())
             return false;
-        nPotentialBlockSize += nTxSize;
     }
     return true;
 }
@@ -262,10 +260,10 @@ void BlockAssembler::AddToBlock(CTxMemPool::txiter iter)
 {
     pblocktemplate->block.vtx.emplace_back(iter->GetSharedTx());
     pblocktemplate->vTxFees.push_back(iter->GetFee());
-    pblocktemplate->vTxSigOpsCount.push_back(iter->GetSigOpCount());
-    nBlockSize += iter->GetTxSize();
+    pblocktemplate->vTxSigOpsCost.push_back(iter->GetSigOpCost());
+    nBlockWeight += iter->GetTxWeight();
     ++nBlockTx;
-    nBlockSigOps += iter->GetSigOpCount();
+    nBlockSigOpsCost += iter->GetSigOpCost();
     nFees += iter->GetFee();
     inBlock.insert(iter);
 
@@ -294,7 +292,7 @@ int BlockAssembler::UpdatePackagesForAdded(const CTxMemPool::setEntries& already
                 CTxMemPoolModifiedEntry modEntry(desc);
                 modEntry.nSizeWithAncestors -= it->GetTxSize();
                 modEntry.nModFeesWithAncestors -= it->GetModifiedFee();
-                modEntry.nSigOpCountWithAncestors -= it->GetSigOpCount();
+                modEntry.nSigOpCostWithAncestors -= it->GetSigOpCost();
                 mapModifiedTx.insert(modEntry);
             } else {
                 mapModifiedTx.modify(mit, update_for_parent_inclusion(it));
@@ -401,11 +399,11 @@ void BlockAssembler::addPackageTxs(int &nPackagesSelected, int &nDescendantsUpda
 
         uint64_t packageSize = iter->GetSizeWithAncestors();
         CAmount packageFees = iter->GetModFeesWithAncestors();
-        int64_t packageSigOps = iter->GetSigOpCountWithAncestors();
+        int64_t packageSigOpsCost = iter->GetSigOpCostWithAncestors();
         if (fUsingModified) {
             packageSize = modit->nSizeWithAncestors;
             packageFees = modit->nModFeesWithAncestors;
-            packageSigOps = modit->nSigOpCountWithAncestors;
+            packageSigOpsCost = modit->nSigOpCostWithAncestors;
         }
 
         if (packageFees < blockMinFeeRate.GetFee(packageSize)) {
@@ -413,7 +411,7 @@ void BlockAssembler::addPackageTxs(int &nPackagesSelected, int &nDescendantsUpda
             return;
         }
 
-        if (!TestPackage(packageSize, packageSigOps)) {
+        if (!TestPackage(packageSize, packageSigOpsCost)) {
             if (fUsingModified) {
                 // Since we always look at the best entry in mapModifiedTx,
                 // we must erase failed entries so that we can consider the
@@ -424,8 +422,8 @@ void BlockAssembler::addPackageTxs(int &nPackagesSelected, int &nDescendantsUpda
 
             ++nConsecutiveFailed;
 
-            if (nConsecutiveFailed > MAX_CONSECUTIVE_FAILURES && nBlockSize >
-                    nBlockMaxSize - 4000) {
+            if (nConsecutiveFailed > MAX_CONSECUTIVE_FAILURES && nBlockWeight >
+                    nBlockMaxWeight - 4000) {
                 // Give up if we're close to full and haven't succeeded in a while
                 break;
             }

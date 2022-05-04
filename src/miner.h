@@ -36,7 +36,8 @@ struct CBlockTemplate
 {
     CBlock block;
     std::vector<CAmount> vTxFees;
-    std::vector<int64_t> vTxSigOpsCount;
+    std::vector<int64_t> vTxSigOpsCost;
+    std::vector<unsigned char> vchCoinbaseCommitment;
 };
 
 // Container for tracking updates to ancestor feerate as we include (parent)
@@ -47,7 +48,7 @@ struct CTxMemPoolModifiedEntry {
         iter = entry;
         nSizeWithAncestors = entry->GetSizeWithAncestors();
         nModFeesWithAncestors = entry->GetModFeesWithAncestors();
-        nSigOpCountWithAncestors = entry->GetSigOpCountWithAncestors();
+        nSigOpCostWithAncestors = entry->GetSigOpCostWithAncestors();
     }
 
     int64_t GetModifiedFee() const { return iter->GetModifiedFee(); }
@@ -59,7 +60,7 @@ struct CTxMemPoolModifiedEntry {
     CTxMemPool::txiter iter;
     uint64_t nSizeWithAncestors;
     CAmount nModFeesWithAncestors;
-    int64_t nSigOpCountWithAncestors;
+    int64_t nSigOpCostWithAncestors;
 };
 
 /** Comparator for CTxMemPool::txiter objects.
@@ -122,7 +123,7 @@ struct update_for_parent_inclusion
     {
         e.nModFeesWithAncestors -= iter->GetFee();
         e.nSizeWithAncestors -= iter->GetTxSize();
-        e.nSigOpCountWithAncestors -= iter->GetSigOpCount();
+        e.nSigOpCostWithAncestors -= iter->GetSigOpCost();
     }
 
     CTxMemPool::txiter iter;
@@ -136,13 +137,14 @@ private:
     std::unique_ptr<CBlockTemplate> pblocktemplate;
 
     // Configuration parameters for the block size
-    unsigned int nBlockMaxSize;
+    bool fIncludeWitness;
+    unsigned int nBlockMaxWeight;
     CFeeRate blockMinFeeRate;
 
     // Information on the current status of the block
-    uint64_t nBlockSize;
+    uint64_t nBlockWeight;
     uint64_t nBlockTx;
-    uint64_t nBlockSigOps;
+    uint64_t nBlockSigOpsCost;
     CAmount nFees;
     CTxMemPool::setEntries inBlock;
 
@@ -156,7 +158,7 @@ private:
 public:
     struct Options {
         Options();
-        size_t nBlockMaxSize;
+        size_t nBlockMaxWeight;
         CFeeRate blockMinFeeRate;
     };
 
@@ -167,7 +169,7 @@ public:
     std::unique_ptr<CBlockTemplate> CreateNewBlock(const CScript& scriptPubKeyIn, int64_t* pFees = 0, bool fProofOfStake = false);
 
     inline static std::optional<int64_t> m_last_block_num_txs{};
-    inline static std::optional<int64_t> m_last_block_size{};
+    inline static std::optional<int64_t> m_last_block_weight{};
 
 private:
     // utility functions
@@ -186,9 +188,9 @@ private:
     /** Remove confirmed (inBlock) entries from given set */
     void onlyUnconfirmed(CTxMemPool::setEntries& testSet);
     /** Test if a new package would "fit" in the block */
-    bool TestPackage(uint64_t packageSize, int64_t packageSigOps) const;
+    bool TestPackage(uint64_t packageSize, int64_t packageSigOpsCost) const;
     /** Perform checks on each transaction in a package:
-      * locktime, serialized size (if necessary)
+      * locktime, premature-witness, serialized size (if necessary)
       * These checks should always succeed, and they're here
       * only as an extra check in case of suboptimal node configuration */
     bool TestPackageTransactions(const CTxMemPool::setEntries& package) const;

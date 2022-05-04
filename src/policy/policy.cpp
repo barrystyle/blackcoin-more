@@ -272,17 +272,17 @@ bool IsWitnessStandard(const CTransaction& tx, const CCoinsViewCache& mapInputs)
     return true;
 }
 
-int64_t GetVirtualTransactionSize(int64_t nWeight, int64_t nSigOpCount, unsigned int bytes_per_sigop)
+int64_t GetVirtualTransactionSize(int64_t nWeight, int64_t nSigOpCost, unsigned int bytes_per_sigop)
 {
-    return std::max(nSize, nSigOpCount * bytes_per_sigop);
+    return (std::max(nWeight, nSigOpCost * bytes_per_sigop) + WITNESS_SCALE_FACTOR - 1) / WITNESS_SCALE_FACTOR;
 }
 
-int64_t GetVirtualTransactionSize(const CTransaction& tx, int64_t nSigOpCount, unsigned int bytes_per_sigop)
+int64_t GetVirtualTransactionSize(const CTransaction& tx, int64_t nSigOpCost, unsigned int bytes_per_sigop)
 {
-    return GetVirtualTransactionSize(::GetSerializeSize(tx, PROTOCOL_VERSION), nSigOpCount, bytes_per_sigop);
+    return GetVirtualTransactionSize(GetTransactionWeight(tx), nSigOpCost, bytes_per_sigop);
 }
 
-int64_t GetVirtualTransactionInputSize(const CTxIn& txin, int64_t nSigOpCount, unsigned int bytes_per_sigop)
+int64_t GetVirtualTransactionInputSize(const CTxIn& txin, int64_t nSigOpCost, unsigned int bytes_per_sigop)
 {
-    return GetVirtualTransactionSize(::GetSerializeSize(txin, PROTOCOL_VERSION), nSigOpCount, bytes_per_sigop);
+    return GetVirtualTransactionSize(GetTransactionInputWeight(txin), nSigOpCost, bytes_per_sigop);
 }
