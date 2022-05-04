@@ -1448,18 +1448,21 @@ static unsigned int GetBlockScriptFlags(const CBlockIndex* pindex, const Consens
     // Enforce CHECKLOCKTIMEVERIFY (BIP65) and BIP147 NULLDUMMY  
     if (consensusparams.IsProtocolV3(pindex->GetBlockTime())) {
         flags |= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
-        flags |= SCRIPT_VERIFY_NULLDUMMY;
     }
 
     // Enforce CHECKSEQUENCEVERIFY (BIP112)
-    //if (DeploymentActiveAt(*pindex, consensusparams, Consensus::DEPLOYMENT_CSV)) {
-    if (chainparams.GetConsensus().IsProtocolV3_1(pindex->GetBlockTime())) {
+    if (consensusparams.IsProtocolV3_1(pindex->GetBlockTime())) {
         flags |= SCRIPT_VERIFY_CHECKSEQUENCEVERIFY;
     }
 
     // Enforce Taproot (BIP340-BIP342)
     if (DeploymentActiveAt(*pindex, consensusparams, Consensus::DEPLOYMENT_TAPROOT)) {
         flags |= SCRIPT_VERIFY_TAPROOT;
+    }
+
+    // Enforce BIP147 NULLDUMMY (activated simultaneously with CLTV)
+    if (consensusparams.IsProtocolV3(pindex->GetBlockTime())) {
+        flags |= SCRIPT_VERIFY_NULLDUMMY;
     }
 
     return flags;
