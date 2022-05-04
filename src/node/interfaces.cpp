@@ -26,6 +26,7 @@
 #include <policy/feerate.h>
 #include <policy/fees.h>
 #include <policy/policy.h>
+#include <policy/rbf.h>
 #include <policy/settings.h>
 #include <primitives/block.h>
 #include <primitives/transaction.h>
@@ -543,6 +544,12 @@ public:
         }
         return false;
     }
+    RBFTransactionState isRBFOptIn(const CTransaction& tx) override
+    {
+        if (!m_node.mempool) return IsRBFOptInEmptyMempool(tx);
+        LOCK(m_node.mempool->cs);
+        return IsRBFOptIn(tx, *m_node.mempool);
+    }
     bool isInMempool(const uint256& txid) override
     {
         if (!m_node.mempool) return false;
@@ -603,6 +610,11 @@ public:
     {
         if (!m_node.fee_estimator) return 0;
         return m_node.fee_estimator->HighestTargetTracked(FeeEstimateHorizon::LONG_HALFLIFE);
+    }
+    CFeeRate mempoolMinFee() override
+    {
+        if (!m_node.mempool) return {};
+        return m_node.mempool->GetMinFee(gArgs.GetArg("-maxmempool", DEFAULT_MAX_MEMPOOL_SIZE) * 1000000);
     }
     CFeeRate relayMinFee() override { return ::minRelayTxFee; }
     CFeeRate relayIncrementalFee() override { return ::incrementalRelayFee; }

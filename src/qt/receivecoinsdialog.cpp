@@ -88,13 +88,8 @@ void ReceiveCoinsDialog::setModel(WalletModel *_model)
             &QItemSelectionModel::selectionChanged, this,
             &ReceiveCoinsDialog::recentRequestsView_selectionChanged);
 
-        if (model->node().isAddressTypeSet()) {
-            // user explicitly set the type, use it
-            if (model->wallet().getDefaultAddressType() == OutputType::BECH32) {
-                ui->useBech32->setCheckState(Qt::Checked);
-            } else {
-                ui->useBech32->setCheckState(Qt::Unchecked);
-            }
+        if (model->wallet().getDefaultAddressType() == OutputType::BECH32) {
+            ui->useBech32->setCheckState(Qt::Checked);
         } else {
             ui->useBech32->setCheckState(Qt::Unchecked);
         }

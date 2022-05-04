@@ -42,6 +42,10 @@ PSBTAnalysis AnalyzePSBT(PartiallySignedTransaction psbtx)
             in_amt += utxo.nValue;
             input_analysis.has_utxo = true;
         } else {
+            if (input.non_witness_utxo && psbtx.tx->vin[i].prevout.n >= input.non_witness_utxo->vout.size()) {
+                result.SetInvalid(strprintf("PSBT is not valid. Input %u specifies invalid prevout", i));
+                return result;
+            }
             input_analysis.has_utxo = false;
             input_analysis.is_final = false;
             input_analysis.next = PSBTRole::UPDATER;
@@ -65,10 +69,11 @@ PSBTAnalysis AnalyzePSBT(PartiallySignedTransaction psbtx)
             if (!complete) {
                 input_analysis.missing_pubkeys = outdata.missing_pubkeys;
                 input_analysis.missing_redeem_script = outdata.missing_redeem_script;
+                input_analysis.missing_witness_script = outdata.missing_witness_script;
                 input_analysis.missing_sigs = outdata.missing_sigs;
 
                 // If we are only missing signatures and nothing else, then next is signer
-                if (outdata.missing_pubkeys.empty() && outdata.missing_redeem_script.IsNull() && !outdata.missing_sigs.empty()) {
+                if (outdata.missing_pubkeys.empty() && outdata.missing_redeem_script.IsNull() && outdata.missing_witness_script.IsNull() && !outdata.missing_sigs.empty()) {
                     input_analysis.next = PSBTRole::SIGNER;
                 } else {
                     input_analysis.next = PSBTRole::UPDATER;
@@ -123,6 +128,7 @@ PSBTAnalysis AnalyzePSBT(PartiallySignedTransaction psbtx)
                 break;
             } else {
                 mtx.vin[i].scriptSig = input.final_script_sig;
+                mtx.vin[i].scriptWitness = input.final_script_witness;
                 newcoin.nHeight = 1;
                 view.AddCoin(psbtx.tx->vin[i].prevout, std::move(newcoin), true);
             }
@@ -130,7 +136,7 @@ PSBTAnalysis AnalyzePSBT(PartiallySignedTransaction psbtx)
 
         if (success) {
             CTransaction ctx = CTransaction(mtx);
-            size_t size = ctx.GetTotalSize();
+            size_t size = GetVirtualTransactionSize(ctx, GetTransactionSigOpCost(ctx, view, STANDARD_SCRIPT_VERIFY_FLAGS));
             result.estimated_vsize = size;
             // Estimate fee rate
             CFeeRate feerate(fee, size);

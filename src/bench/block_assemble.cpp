@@ -4,7 +4,6 @@
 
 #include <bench/bench.h>
 #include <consensus/validation.h>
-#include <script/standard.h>
 #include <crypto/sha256.h>
 #include <test/util/mining.h>
 #include <test/util/script.h>
@@ -24,14 +23,13 @@ static void AssembleBlock(benchmark::Bench& bench)
     witness.stack.push_back(WITNESS_STACK_ELEM_OP_TRUE);
 
     // Collect some loose transactions that spend the coinbases of our mined blocks
-    constexpr size_t NUM_BLOCKS{600};
-    constexpr int COINBASE_MATURITY = 500;
+    constexpr size_t NUM_BLOCKS{200};
     std::array<CTransactionRef, NUM_BLOCKS - COINBASE_MATURITY + 1> txs;
     for (size_t b{0}; b < NUM_BLOCKS; ++b) {
         CMutableTransaction tx;
-        tx.vin.push_back(MineBlock(test_setup->m_node, SCRIPT_PUB));
+        tx.vin.push_back(MineBlock(test_setup->m_node, P2WSH_OP_TRUE));
         tx.vin.back().scriptWitness = witness;
-        tx.vout.emplace_back(1337, SCRIPT_PUB);
+        tx.vout.emplace_back(1337, P2WSH_OP_TRUE);
         if (NUM_BLOCKS - b >= COINBASE_MATURITY)
             txs.at(b) = MakeTransactionRef(tx);
     }
