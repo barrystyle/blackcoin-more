@@ -59,7 +59,7 @@ namespace BCLog {
         VALIDATION  = (1 << 21),
         I2P         = (1 << 22),
         IPC         = (1 << 23),
-        COINSTAKE   = (1 << 99),
+        COINSTAKE   = (1 << 30),
         ALL         = ~(uint32_t)0,
     };
 
