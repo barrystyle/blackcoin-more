@@ -9,6 +9,8 @@
 #include <script/interpreter.h>
 #include <consensus/validation.h>
 
+#include <validation.h>
+
 // TODO remove the following dependencies
 #include <chain.h>
 #include <coins.h>
@@ -235,8 +237,8 @@ CAmount GetMinFee(size_t nBytes, uint32_t nTime)
         nMinFee = (1 + (CAmount)nBytes / 1000) * MIN_TX_FEE_PER_KB;
     else {
         nMinFee = ::minRelayTxFee.GetFee(nBytes);
-        if (nMinFee < DEFAULT_TRANSACTION_MINFEE)
-            nMinFee = DEFAULT_TRANSACTION_MINFEE;
+        if (nMinFee < DEFAULT_MIN_RELAY_TX_FEE)
+            nMinFee = DEFAULT_MIN_RELAY_TX_FEE;
     }
 
     if (!MoneyRange(nMinFee))
