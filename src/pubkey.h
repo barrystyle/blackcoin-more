@@ -196,11 +196,6 @@ public:
         return size() == COMPRESSED_SIZE;
     }
 
-    std::vector<unsigned char> getvch() const
-    {
-        return std::vector<unsigned char>(begin(), end());
-    }
-
     /**
      * Verify a DER signature (~72 bytes).
      * If this public key is not fully valid, the return value will be false.
@@ -211,8 +206,6 @@ public:
      * Check whether a signature is normalized (lower-S).
      */
     static bool CheckLowS(const std::vector<unsigned char>& vchSig);
-
-    static bool CheckSignatureElement(const unsigned char *vch, int len, bool half);
 
     //! Recover a public key from a compact signature.
     bool RecoverCompact(const uint256& hash, const std::vector<unsigned char>& vchSig);

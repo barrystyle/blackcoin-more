@@ -7,13 +7,11 @@
 #define BITCOIN_AMOUNT_H
 
 #include <stdint.h>
-#include <serialize.h>
 
 /** Amount in satoshis (Can be negative) */
 typedef int64_t CAmount;
 
 static const CAmount COIN = 100000000;
-static const CAmount CENT = 1000000;
 
 /** No amount larger than this (in satoshi) is valid.
  *

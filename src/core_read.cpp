@@ -163,15 +163,13 @@ static bool DecodeTx(CMutableTransaction& tx, const std::vector<unsigned char>& 
 
     // Try decoding with legacy serialization, and remember if the result successfully consumes the entire input.
     if (try_no_witness) {
-        CDataStream ssData(tx_data, SER_NETWORK, PROTOCOL_VERSION);
+        CDataStream ssData(tx_data, SER_NETWORK, PROTOCOL_VERSION | SERIALIZE_TRANSACTION_NO_WITNESS);
         try {
             ssData >> tx_legacy;
             if (ssData.empty()) ok_legacy = true;
         } catch (const std::exception&) {
             // Fall through.
         }
-    } catch (const std::exception&) {
-        // Fall through.
     }
 
     // If legacy decoding succeeded and passes CheckTxScriptsSanity, that's our answer, as we know
