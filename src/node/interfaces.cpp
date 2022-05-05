@@ -594,18 +594,7 @@ public:
             entry, ancestors, limit_ancestor_count, limit_ancestor_size,
             limit_descendant_count, limit_descendant_size, unused_error_string);
     }
-    CFeeRate estimateSmartFee(int num_blocks, bool conservative, FeeCalculation* calc) override
-    {
-        if (!m_node.fee_estimator) return {};
-        return m_node.fee_estimator->estimateSmartFee(num_blocks, calc, conservative);
-    }
-    unsigned int estimateMaxBlocks() override
-    {
-        if (!m_node.fee_estimator) return 0;
-        return m_node.fee_estimator->HighestTargetTracked(FeeEstimateHorizon::LONG_HALFLIFE);
-    }
     CFeeRate relayMinFee() override { return ::minRelayTxFee; }
-    CFeeRate relayIncrementalFee() override { return ::incrementalRelayFee; }
     CFeeRate relayDustFee() override { return ::dustRelayFee; }
     bool havePruned() override
     {

@@ -133,11 +133,6 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     pblocktemplate->vTxFees.push_back(-1); // updated at end
     pblocktemplate->vTxSigOpsCost.push_back(-1); // updated at end
 
-#ifdef ENABLE_WALLET
-    if (pwallet && pwallet->IsStakeClosing())
-        return nullptr;
-#endif
-
     LOCK2(cs_main, m_mempool.cs);
     CBlockIndex* pindexPrev = m_chainstate.m_chain.Tip();
     assert(pindexPrev != nullptr);
@@ -604,7 +599,7 @@ void PoSMiner(std::shared_ptr<CWallet> pwallet, ChainstateManager* chainman, CCh
                         // increase priority
                         SetThreadPriority(THREAD_PRIORITY_ABOVE_NORMAL);
                         // Sign the full block
-                        CheckStake(pblock, *pwallet, *chainman);
+                        CheckStake(pblock, *pwallet, *chainman, *chainstate);
                         // return back to low priority
                         SetThreadPriority(THREAD_PRIORITY_LOWEST);
                         UninterruptibleSleep(std::chrono::milliseconds{500});
@@ -673,8 +668,6 @@ bool SignBlock(std::shared_ptr<CBlock> pblock, CWallet& wallet, int64_t& nFees, 
     CMutableTransaction txCoinBase(*pblock->vtx[0]);
     CMutableTransaction txCoinStake;
     uint32_t nTimeBlock = nTime;
-
-    if (wallet.IsStakeClosing()) return false;
     
     LOCK(wallet.cs_wallet);
 

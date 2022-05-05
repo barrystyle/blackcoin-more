@@ -1183,7 +1183,7 @@ void PeerManagerImpl::PushNodeVersion(CNode& pnode, int64_t nTime)
 bool PeerManagerImpl::ProcessNetBlockHeaders(CNode* pfrom, const std::vector<CBlockHeader>& block, BlockValidationState& state, const CChainParams& chainparams, const CBlockIndex** ppindex=nullptr)
 {
     const CBlockIndex *pindexFirst = nullptr;
-    bool ret = ProcessNewBlockHeaders(block, state, chainparams, ppindex, first_invalid, &pindexFirst);
+    bool ret = ProcessNewBlockHeaders(block, state, chainparams, ppindex, &pindexFirst);
     if(gArgs.GetBoolArg("-headerspamfilter", DEFAULT_HEADER_SPAM_FILTER))
     {
         LOCK(cs_main);
@@ -2614,7 +2614,7 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
             return;
         }
 
-        if (nVersion < (chainparams.GetConsensus().IsProtocolV3_1(GetAdjustedTime()) ? PROTOCOL_VERSION : MIN_PEER_PROTO_VERSION)) {
+        if (nVersion < (Params().GetConsensus().IsProtocolV3_1(GetAdjustedTime()) ? PROTOCOL_VERSION : MIN_PEER_PROTO_VERSION)) {
             // disconnect from peers older than this proto version
             LogPrint(BCLog::NET, "peer=%d using obsolete version %i; disconnecting\n", pfrom.GetId(), nVersion);
             pfrom.fDisconnect = true;

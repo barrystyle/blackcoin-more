@@ -643,8 +643,7 @@ bool CWallet::CreateTransactionInternal(
     coin_selection_params.m_discard_feerate = GetDiscardRate(*this);
 
     // Get the fee rate to use effective values in coin selection
-    FeeCalculation feeCalc;
-    coin_selection_params.m_effective_feerate = GetMinimumFeeRate(*this, coin_control, &feeCalc);
+    coin_selection_params.m_effective_feerate = *(coin_control.m_feerate);
     // Do not, ever, assume that it's fine to change the fee rate if the user has explicitly
     // provided one
     if (coin_control.m_feerate && coin_selection_params.m_effective_feerate > *coin_control.m_feerate) {
@@ -653,9 +652,7 @@ bool CWallet::CreateTransactionInternal(
     }
 
     // Get long term estimate
-    CCoinControl cc_temp;
-    cc_temp.m_confirm_target = chain().estimateMaxBlocks();
-    coin_selection_params.m_long_term_feerate = GetMinimumFeeRate(*this, cc_temp, nullptr);
+    coin_selection_params.m_long_term_feerate = *(coin_control.m_feerate);
 
     // Calculate the cost of change
     // Cost of change is the cost of creating the change output + cost of spending the change output in the future.
