@@ -3297,7 +3297,7 @@ void CWallet::StakeCoins(bool fStake)
     ::StakeCoins(fStake, this, stakeThread);
 }
 
-void CWallet::StartStake(CConnman *connman)
+void CWallet::StartStake()
 {
     m_enabled_staking = true;
     StakeCoins(true);
@@ -3344,7 +3344,39 @@ void CWallet::CleanCoinStake()
     }
 }
 
-void CWallet::AvailableCoinsForStaking(interfaces::Chain::Lock& locked_chain, std::vector<COutput>& vCoins) const
+uint64_t CWallet::GetStakeWeight() const
+{
+    // Choose coins to use
+    const auto bal = GetBalance();
+    CAmount nBalance = bal.m_mine_trusted;
+
+    if (nBalance <= m_reserve_balance)
+        return 0;
+
+    vector<const CWalletTx*> vwtxPrev;
+
+    set<pair<const CWalletTx*,unsigned int> > setCoins;
+    CAmount nValueIn = 0;
+
+    CAmount nTargetValue = nBalance - m_reserve_balance;
+    if (!SelectCoinsForStaking(nTargetValue, setCoins, nValueIn))
+        return 0;
+
+    if (setCoins.empty())
+        return 0;
+
+    uint64_t nWeight = 0;
+
+    for (std::pair<const CWalletTx*,unsigned int> pcoin : setCoins)
+    {
+        if (pcoin.first->GetDepthInMainChain() >= Params().GetConsensus().nCoinbaseMaturity)
+            nWeight += pcoin.first->tx->vout[pcoin.second].nValue;
+    }
+
+    return nWeight;
+}
+
+void CWallet::AvailableCoinsForStaking(std::vector<COutput>& vCoins) const
 {
     AssertLockHeld(cs_main);
     AssertLockHeld(cs_wallet);
@@ -3383,10 +3415,10 @@ void CWallet::AvailableCoinsForStaking(interfaces::Chain::Lock& locked_chain, st
 }
 
 // Select some coins without random shuffle or best subset approximation
-bool CWallet::SelectCoinsForStaking(interfaces::Chain::Lock& locked_chain, CAmount& nTargetValue, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet) const
+bool CWallet::SelectCoinsForStaking(CAmount& nTargetValue, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet) const
 {
     vector<COutput> vCoins;
-    AvailableCoinsForStaking(locked_chain, vCoins);
+    AvailableCoinsForStaking(vCoins);
 
     setCoinsRet.clear();
     nValueRet = 0;
@@ -3424,7 +3456,7 @@ bool CWallet::SelectCoinsForStaking(interfaces::Chain::Lock& locked_chain, CAmou
 
 // peercoin: create coin stake transaction
 typedef std::vector<unsigned char> valtype;
-bool CWallet::CreateCoinStake(interfaces::Chain::Lock& locked_chain, const FillableSigningProvider& keystore, unsigned int nBits, int64_t nSearchInterval, CAmount& nFees, CMutableTransaction& tx, CKey& key)
+bool CWallet::CreateCoinStake(const FillableSigningProvider& keystore, unsigned int nBits, int64_t nSearchInterval, CAmount& nFees, CMutableTransaction& tx, CKey& key)
 {
     CBlockIndex* pindexPrev = ::ChainActive().Tip();
     arith_uint256 bnTargetPerCoinDay;
@@ -3440,7 +3472,8 @@ bool CWallet::CreateCoinStake(interfaces::Chain::Lock& locked_chain, const Filla
     txNew.vout.push_back(CTxOut(0, scriptEmpty));
 
     // Choose coins to use
-    CAmount nBalance = GetBalance().m_mine_trusted;
+    const auto bal = GetBalance();
+    CAmount nBalance = bal.m_mine_trusted;
 
     if (nBalance <= m_reserve_balance)
         return false;
@@ -3452,7 +3485,7 @@ bool CWallet::CreateCoinStake(interfaces::Chain::Lock& locked_chain, const Filla
 
     // Select coins with suitable depth
     CAmount nTargetValue = nBalance - m_reserve_balance;
-    if (!SelectCoinsForStaking(locked_chain, nTargetValue, setCoins, nValueIn))
+    if (!SelectCoinsForStaking(nTargetValue, setCoins, nValueIn))
         return false;
 
     if (setCoins.empty())
@@ -3493,18 +3526,18 @@ bool CWallet::CreateCoinStake(interfaces::Chain::Lock& locked_chain, const Filla
                 scriptPubKeyKernel = pcoin.first->tx->vout[pcoin.second].scriptPubKey;
                 txnouttype whichType = Solver(scriptPubKeyKernel, vSolutions);
                 if (!Solver(scriptPubKeyKernel, vSolutions))
-                if (whichType == TX_NONSTANDARD)
+                if (whichType == TxoutType::NONSTANDARD)
                 {
                     LogPrint(BCLog::COINSTAKE, "CreateCoinStake : failed to parse kernel\n");
                     break;
                 }
                 LogPrint(BCLog::COINSTAKE, "CreateCoinStake : parsed kernel type=%d\n", whichType);
-                if (whichType != TX_PUBKEY && whichType != TX_PUBKEYHASH)
+                if (whichType != TxoutType::PUBKEY && whichType != TxoutType::PUBKEYHASH)
                 {
                     LogPrint(BCLog::COINSTAKE, "CreateCoinStake : no support for kernel type=%d\n", whichType);
                     break;  // only support pay to public key and pay to address
                 }
-                if (whichType == TX_PUBKEYHASH) // pay to address type
+                if (whichType == TxoutType::PUBKEYHASH) // pay to address type
                 {
                     // convert to pay to public key type
                     uint160 hash160(vSolutions[0]);
@@ -3517,7 +3550,7 @@ bool CWallet::CreateCoinStake(interfaces::Chain::Lock& locked_chain, const Filla
 
                     scriptPubKeyOut << key.GetPubKey().getvch() << OP_CHECKSIG;
                 }
-                if (whichType == TX_PUBKEY)
+                if (whichType == TxoutType::PUBKEY)
                 {
 
                     valtype& vchPubKey = vSolutions[0];

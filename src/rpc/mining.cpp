@@ -468,8 +468,7 @@ UniValue getstakinginfo(const JSONRPCRequest& request)
     if (pwallet)
     {
         LOCK(pwallet->cs_wallet);
-        auto locked_chain = pwallet->chain().lock();
-        nWeight = pwallet->GetStakeWeight(*locked_chain);
+        nWeight = pwallet->GetStakeWeight();
         lastCoinStakeSearchInterval = pwallet->m_last_coin_stake_search_interval;
     }
 #endif

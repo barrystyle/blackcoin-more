@@ -287,7 +287,6 @@ void Shutdown(NodeContext& node)
     GetMainSignals().UnregisterBackgroundSignalScheduler();
     init::UnsetGlobals();
     node.mempool.reset();
-    node.fee_estimator.reset();
     node.chainman.reset();
     node.scheduler.reset();
 
@@ -897,9 +896,8 @@ bool AppInitParameterInteraction(const ArgsManager& args)
 
     fCheckBlockIndex = args.GetBoolArg("-checkblockindex", chainparams.DefaultConsistencyChecks());
     fCheckpointsEnabled = args.GetBoolArg("-checkpoints", DEFAULT_CHECKPOINTS_ENABLED);
-        if (gArgs.GetBoolArg("-checkpoints", false))
-            return InitError(strprintf("Error: Unsupported argument -checkpoints found. We rely on it to verify pre-protocolv3 era."));
-
+    if (fCheckpointsEnabled)
+        return InitError(_("Unsupported argument -checkpoints found. We rely on it to verify pre-protocolv3 era."));
 
     hashAssumeValid = uint256S(args.GetArg("-assumevalid", chainparams.GetConsensus().defaultAssumeValid.GetHex()));
     if (!hashAssumeValid.IsNull())
@@ -1179,7 +1177,7 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
 
     assert(!node.mempool);
     int check_ratio = std::min<int>(std::max<int>(args.GetArg("-checkmempool", chainparams.DefaultConsistencyChecks() ? 1 : 0), 0), 1000000);
-    node.mempool = std::make_unique<CTxMemPool>(node.fee_estimator.get(), check_ratio);
+    node.mempool = std::make_unique<CTxMemPool>(check_ratio);
 
     assert(!node.chainman);
     node.chainman = std::make_unique<ChainstateManager>();
