@@ -14,6 +14,7 @@
 #include <interfaces/wallet.h>
 #include <key.h>
 #include <key_io.h>
+#include <miner.h>
 #include <outputtype.h>
 #include <policy/fees.h>
 #include <policy/policy.h>
@@ -2869,6 +2870,11 @@ void CWallet::postInitProcess()
 
     // Update wallet transactions with current mempool transactions.
     chain().requestMempoolTransactions(*this);
+
+    // Start mine proof-of-stake blocks in the background
+    if (CanStake()) {
+        StartStake();
+    }
 }
 
 bool CWallet::BackupWallet(const std::string& strDest) const
@@ -3456,7 +3462,7 @@ bool CWallet::SelectCoinsForStaking(CAmount& nTargetValue, std::set<std::pair<co
 
 // peercoin: create coin stake transaction
 typedef std::vector<unsigned char> valtype;
-bool CWallet::CreateCoinStake(const FillableSigningProvider& keystore, unsigned int nBits, int64_t nSearchInterval, CAmount& nFees, CMutableTransaction& tx, CKey& key)
+bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmount& nFees, CMutableTransaction& tx, CKey& key)
 {
     CBlockIndex* pindexPrev = ::ChainActive().Tip();
     arith_uint256 bnTargetPerCoinDay;
@@ -3482,6 +3488,8 @@ bool CWallet::CreateCoinStake(const FillableSigningProvider& keystore, unsigned 
 
     set<pair<const CWalletTx*,unsigned int> > setCoins;
     CAmount nValueIn = 0;
+
+    PKHash pkhash;
 
     // Select coins with suitable depth
     CAmount nTargetValue = nBalance - m_reserve_balance;
@@ -3524,7 +3532,7 @@ bool CWallet::CreateCoinStake(const FillableSigningProvider& keystore, unsigned 
                 std::vector<valtype> vSolutions;
                 CScript scriptPubKeyOut;
                 scriptPubKeyKernel = pcoin.first->tx->vout[pcoin.second].scriptPubKey;
-                txnouttype whichType = Solver(scriptPubKeyKernel, vSolutions);
+                TxoutType whichType = Solver(scriptPubKeyKernel, vSolutions);
                 if (!Solver(scriptPubKeyKernel, vSolutions))
                 if (whichType == TxoutType::NONSTANDARD)
                 {
@@ -3541,23 +3549,24 @@ bool CWallet::CreateCoinStake(const FillableSigningProvider& keystore, unsigned 
                 {
                     // convert to pay to public key type
                     uint160 hash160(vSolutions[0]);
-                    CKeyID pubKeyHash(hash160);
-                    if (!keystore.GetKey(pubKeyHash, key))
+                    pkhash = PKHash(hash160);
+                    CPubKey pubKeyStake;
+                    if (!GetPubKey(pkhash, pubKeyStake))
                     {
                         LogPrint(BCLog::COINSTAKE, "CreateCoinStake : failed to get key for kernel type=%d\n", whichType);
                         break;  // unable to find corresponding public key
                     }
 
-                    scriptPubKeyOut << key.GetPubKey().getvch() << OP_CHECKSIG;
+                    scriptPubKeyOut << pubKeyStake.getvch() << OP_CHECKSIG;
                 }
                 if (whichType == TxoutType::PUBKEY)
                 {
-
                     valtype& vchPubKey = vSolutions[0];
                     CPubKey pubKey(vchPubKey);
                     uint160 hash160(Hash160(vchPubKey));
-                    CKeyID pubKeyHash(hash160);
-                    if (!keystore.GetKey(pubKeyHash, key))
+                    pkhash = PKHash(hash160);
+                    CPubKey pubKeyStake;
+                    if (!GetPubKey(pkhash, pubKeyStake))
                     {
                         LogPrint(BCLog::COINSTAKE, "CreateCoinStake : failed to get key for kernel type=%d\n", whichType);
                         break;  // unable to find corresponding public key

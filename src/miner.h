@@ -208,7 +208,7 @@ private:
 
 #ifdef ENABLE_WALLET
 /** Generate a new block */
-void StakeCoins(bool fStake, CWallet *pwallet, CConnman* connman, boost::thread_group*& stakeThread);
+void StakeCoins(bool fStake, CWallet *pwallet, boost::thread_group*& stakeThread);
 #endif
 
 /** Modify the extranonce in a block */
@@ -217,6 +217,9 @@ int64_t UpdateTime(CBlock* pblock, const Consensus::Params& consensusParams, con
 
 /** Sign proof-of-stake block */
 bool SignBlock(std::shared_ptr<CBlock> pblock, CWallet& wallet, int64_t& nFees, uint32_t nTime);
+
+/** Check if staking is enabled */
+bool CanStake();
 
 /** Update an old GenerateCoinbaseCommitment from CreateNewBlock after the block txs have changed */
 void RegenerateCommitments(CBlock& block, ChainstateManager& chainman);

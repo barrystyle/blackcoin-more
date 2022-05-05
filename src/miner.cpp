@@ -172,7 +172,7 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     int64_t nTime1 = GetTimeMicros();
 
     m_last_block_num_txs = nBlockTx;
-    m_last_block_size = nBlockSize;
+    m_last_block_weight = nBlockWeight;
 
     // Create coinbase transaction.
     CMutableTransaction coinbaseTx;
@@ -486,6 +486,16 @@ void IncrementExtraNonce(CBlock* pblock, const CBlockIndex* pindexPrev, unsigned
     pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
 }
 
+bool CanStake()
+{
+    bool canStake = gArgs.GetBoolArg("-staking", DEFAULT_STAKE);
+    if (canStake) {
+        // Signet is for creating PoW blocks by an authorized signer
+        canStake = !Params().GetConsensus().signet_blocks;
+    }
+    return canStake;
+}
+
 #ifdef ENABLE_WALLET
 bool CheckStake(std::shared_ptr<CBlock> pblock, CWallet& wallet)
 {
@@ -626,7 +636,7 @@ void ThreadStakeMiner(CWallet *pwallet, CConnman* connman)
     }
 }
 
-void StakeCoins(bool fStake, CWallet *pwallet, CConnman* connman, boost::thread_group*& stakeThread)
+void StakeCoins(bool fStake, CWallet *pwallet, boost::thread_group*& stakeThread)
 {
     if (stakeThread != nullptr)
     {
@@ -638,7 +648,7 @@ void StakeCoins(bool fStake, CWallet *pwallet, CConnman* connman, boost::thread_
     if (fStake)
     {
         stakeThread = new boost::thread_group();
-        stakeThread->create_thread(boost::bind(&ThreadStakeMiner, pwallet, connman));
+        stakeThread->create_thread(boost::bind(&ThreadStakeMiner, pwallet));
     }
 }
 
@@ -665,11 +675,9 @@ bool SignBlock(std::shared_ptr<CBlock> pblock, CWallet& wallet, int64_t& nFees, 
 
     if (wallet.IsStakeClosing()) return false;
     
-    auto locked_chain = wallet.chain().lock();
     LOCK(wallet.cs_wallet);
-    LegacyScriptPubKeyMan* spk_man = wallet.GetLegacyScriptPubKeyMan();
 
-    if (wallet.CreateCoinStake(*locked_chain, *spk_man, pblock->nBits, 1, nFees, txCoinStake, key))
+    if (wallet.CreateCoinStake(pblock->nBits, 1, nFees, txCoinStake, key))
     {
         if (nTimeBlock >= pindexBestHeader->GetMedianTimePast()+1)
         {
