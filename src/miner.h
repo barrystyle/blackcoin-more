@@ -24,7 +24,10 @@
 class CBlockIndex;
 class CChainParams;
 class CScript;
+
+#ifdef ENABLE_WALLET
 class CWallet;
+#endif
 
 namespace Consensus { struct Params; };
 
@@ -156,6 +159,10 @@ private:
     const CTxMemPool& m_mempool;
     CChainState& m_chainstate;
 
+#ifdef ENABLE_WALLET
+    CWallet *pwallet = 0;
+#endif
+
 public:
     struct Options {
         Options();
@@ -206,11 +213,6 @@ private:
     int UpdatePackagesForAdded(const CTxMemPool::setEntries& alreadyAdded, indexed_modified_transaction_set& mapModifiedTx) EXCLUSIVE_LOCKS_REQUIRED(m_mempool.cs);
 };
 
-#ifdef ENABLE_WALLET
-/** Generate a new block */
-void StakeCoins(bool fStake, CWallet *pwallet, boost::thread_group*& stakeThread);
-#endif
-
 /** Modify the extranonce in a block */
 void IncrementExtraNonce(CBlock* pblock, const CBlockIndex* pindexPrev, unsigned int& nExtraNonce);
 int64_t UpdateTime(CBlock* pblock, const Consensus::Params& consensusParams, const CBlockIndex* pindexPrev);
@@ -218,8 +220,9 @@ int64_t UpdateTime(CBlock* pblock, const Consensus::Params& consensusParams, con
 /** Sign proof-of-stake block */
 bool SignBlock(std::shared_ptr<CBlock> pblock, CWallet& wallet, int64_t& nFees, uint32_t nTime);
 
-/** Check if staking is enabled */
-bool CanStake();
+/** Mine proof-of-stake blocks */
+void MintStake(std::shared_ptr<CWallet> pwallet, ChainstateManager* chainman, CChainState* chainstate, CConnman* connman, CTxMemPool* mempool);
+void InterruptStaking();
 
 /** Update an old GenerateCoinbaseCommitment from CreateNewBlock after the block txs have changed */
 void RegenerateCommitments(CBlock& block, ChainstateManager& chainman);

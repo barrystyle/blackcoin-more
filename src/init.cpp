@@ -169,6 +169,7 @@ void Interrupt(NodeContext& node)
     InterruptREST();
     InterruptTorControl();
     InterruptMapPort();
+    InterruptStaking();
     if (node.connman)
         node.connman->Interrupt();
     if (g_txindex) {
@@ -1802,6 +1803,10 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
 #if HAVE_SYSTEM
     StartupNotify(args);
 #endif
+
+    if (HasWallets() && GetWallets()[0] && gArgs.GetBoolArg("-staking", DEFAULT_STAKE)) {
+        MinePoS(GetWallets()[0], &node.chainman->ActiveChainstate(), node.connman.get(), node.mempool.get());
+    }
 
     return true;
 }

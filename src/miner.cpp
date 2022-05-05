@@ -27,8 +27,10 @@
 #endif
 
 #include <algorithm>
+#include <thread>
 #include <utility>
 
+std::thread threadStakeMiner;
 int64_t nLastCoinStakeSearchInterval = 0;
 unsigned int nMinerSleep = 500;
 
@@ -486,18 +488,8 @@ void IncrementExtraNonce(CBlock* pblock, const CBlockIndex* pindexPrev, unsigned
     pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
 }
 
-bool CanStake()
-{
-    bool canStake = gArgs.GetBoolArg("-staking", DEFAULT_STAKE);
-    if (canStake) {
-        // Signet is for creating PoW blocks by an authorized signer
-        canStake = !Params().GetConsensus().signet_blocks;
-    }
-    return canStake;
-}
-
 #ifdef ENABLE_WALLET
-bool CheckStake(std::shared_ptr<CBlock> pblock, CWallet& wallet)
+bool CheckStake(std::shared_ptr<CBlock> pblock, CWallet& wallet, ChainstateManager& chainman, CChainState& chainstate)
 {
     uint256 hashBlock = pblock->GetHash();
 
@@ -506,7 +498,7 @@ bool CheckStake(std::shared_ptr<CBlock> pblock, CWallet& wallet)
 
     // verify hash target and signature of coinstake tx
     BlockValidationState state;
-    if (!CheckProofOfStake(::BlockIndex()[pblock->hashPrevBlock], *pblock->vtx[1], pblock->nBits, state, ::ChainstateActive().CoinsTip(), pblock->vtx[1]->nTime ? pblock->vtx[1]->nTime : pblock->nTime))
+    if (!CheckProofOfStake(chainman.BlockIndex()[pblock->hashPrevBlock], *pblock->vtx[1], pblock->nBits, state, chainstate.CoinsTip(), pblock->vtx[1]->nTime ? pblock->vtx[1]->nTime : pblock->nTime))
         return error("CheckStake() : proof-of-stake checking failed");
 
     //// debug print
@@ -516,8 +508,8 @@ bool CheckStake(std::shared_ptr<CBlock> pblock, CWallet& wallet)
 
     // Found a solution
     {
-        auto locked_chain = wallet.chain().lock();
-        if (pblock->hashPrevBlock != ::ChainActive().Tip()->GetBlockHash())
+        LOCK(cs_main);
+        if (pblock->hashPrevBlock != chainstate->m_chain.Tip()->GetBlockHash())
             return error("CheckStake() : generated block is stale");
 
         for (const CTxIn& vin : pblock->vtx[1]->vin) {
@@ -527,16 +519,15 @@ bool CheckStake(std::shared_ptr<CBlock> pblock, CWallet& wallet)
         }
 
         // Process this block the same as if we had received it from another node
-        std::shared_ptr<const CBlock> staked_pblock =
+        std::shared_ptr<const CBlock> shared_pblock =
                     std::make_shared<const CBlock>(*pblock);
-        if (!ProcessNewBlock(Params(), staked_pblock, true, NULL))
+        if (!chainman->ProcessNewBlock(Params(), shared_pblock, true, NULL))
             return error("CheckStake() : ProcessNewBlock, block not accepted");
     }
-
     return true;
 }
 
-void ThreadStakeMiner(CWallet *pwallet, CConnman* connman)
+void PoSMiner(std::shared_ptr<CWallet> pwallet, ChainstateManager* chainman, CChainState* chainstate, CConnman* connman, CTxMemPool* mempool)
 {
     SetThreadPriority(THREAD_PRIORITY_LOWEST);
     LogPrintf("Staking started\n");
@@ -560,14 +551,14 @@ void ThreadStakeMiner(CWallet *pwallet, CConnman* connman)
             }
 
             if (!regtestMode) {
-                while (connman->GetNodeCount(CConnman::CONNECTIONS_ALL) == 0 || ::ChainstateActive().IsInitialBlockDownload()) {
+                while (connman == nullptr || connman->GetNodeCount(ConnectionDirection::Both) == 0 || chainstate->IsInitialBlockDownload()) {
                     pwallet->m_last_coin_stake_search_interval = 0;
                     fTryToSync = true;
                     UninterruptibleSleep(std::chrono::milliseconds{1000});
                 }
                 if (fTryToSync) {
                     fTryToSync = false;
-                    if (connman->GetNodeCount(CConnman::CONNECTIONS_ALL) < 3 || pindexBestHeader->GetBlockTime() < GetTime() - 10 * 60) {
+                    if (connman->GetNodeCount(ConnectionDirection::Both) < 3 || pindexBestHeader->GetBlockTime() < GetTime() - 10 * 60) {
                         UninterruptibleSleep(std::chrono::milliseconds{60000});
                         continue;
                     }
@@ -582,9 +573,8 @@ void ThreadStakeMiner(CWallet *pwallet, CConnman* connman)
             CAmount nValueIn = 0;
             std::set<std::pair<const CWalletTx*,unsigned int> > setCoins;
             {
-                auto locked_chain = pwallet->chain().lock();
                 LOCK(pwallet->cs_wallet);
-                pwallet->SelectCoinsForStaking(*locked_chain, nTargetValue, setCoins, nValueIn);
+                pwallet->SelectCoinsForStaking(nTargetValue, setCoins, nValueIn);
             }
             if (setCoins.size() > 0)
             {
@@ -592,7 +582,7 @@ void ThreadStakeMiner(CWallet *pwallet, CConnman* connman)
                 std::unique_ptr<CBlockTemplate> pblocktemplate;
 
                 // First just create an empty block. No need to process transactions until we know we can create a block
-                pblocktemplate = BlockAssembler(mempool, Params()).CreateNewBlock(CScript(), &nFees, true);
+                pblocktemplate = BlockAssembler(*chainstate, *mempool, Params()).CreateNewBlock(CScript(), &nFees, true);
 
                 if (!pblocktemplate.get())
                     return;
@@ -614,7 +604,7 @@ void ThreadStakeMiner(CWallet *pwallet, CConnman* connman)
                         // increase priority
                         SetThreadPriority(THREAD_PRIORITY_ABOVE_NORMAL);
                         // Sign the full block
-                        CheckStake(pblock, *pwallet);
+                        CheckStake(pblock, *pwallet, *chainman);
                         // return back to low priority
                         SetThreadPriority(THREAD_PRIORITY_LOWEST);
                         UninterruptibleSleep(std::chrono::milliseconds{500});
@@ -636,20 +626,31 @@ void ThreadStakeMiner(CWallet *pwallet, CConnman* connman)
     }
 }
 
-void StakeCoins(bool fStake, CWallet *pwallet, boost::thread_group*& stakeThread)
+void static ThreadStakeMiner(std::shared_ptr<CWallet> pwallet, ChainstateManager* chainman, CChainState* chainstate, CConnman* connman, CTxMemPool* mempool)
 {
-    if (stakeThread != nullptr)
+    LogPrintf("ThreadStakeMiner started\n");
+    try
     {
-        stakeThread->interrupt_all();
-        delete stakeThread;
-        stakeThread = nullptr;
+        PoSMiner(pwallet, chainman, chainstate, connman, mempool);
     }
+    catch (std::exception& e) {
+        PrintExceptionContinue(&e, "ThreadStakeMiner()");
+    } catch (...) {
+        PrintExceptionContinue(NULL, "ThreadStakeMiner()");
+    }
+    LogPrintf("ThreadStakeMiner exiting\n");
+}
 
-    if (fStake)
-    {
-        stakeThread = new boost::thread_group();
-        stakeThread->create_thread(boost::bind(&ThreadStakeMiner, pwallet));
-    }
+void MinePoS(std::shared_ptr<CWallet> pwallet, ChainstateManager* chainman, CChainState* chainstate, CConnman* connman, CTxMemPool* mempool)
+{
+    // reddcoin: mint proof-of-stake blocks in the background
+    threadStakeMiner = std::thread(&ThreadStakeMiner, std::move(pwallet), std::move(chainman), std::move(chainstate), std::move(connman), std::move(mempool));
+}
+
+void InterruptStaking()
+{
+    LogPrintf("ThreadStakeMiner interrupted\n");
+    threadStakeMiner.join();
 }
 
 // novacoin: attempt to generate suitable proof-of-stake

@@ -481,7 +481,7 @@ UniValue getstakinginfo(const JSONRPCRequest& request)
 
     UniValue obj(UniValue::VOBJ);
 
-    obj.pushKV("enabled", gArgs.GetBoolArg("-staking", true));
+    obj.pushKV("enabled", gArgs.GetBoolArg("-staking", DEFAULT_STAKE));
     obj.pushKV("staking", staking);
     obj.pushKV("errors", GetWarnings("statusbar"));
 

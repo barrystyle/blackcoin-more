@@ -335,12 +335,6 @@ private:
      */
     static bool AttachChain(const std::shared_ptr<CWallet>& wallet, interfaces::Chain& chain, bilingual_str& error, std::vector<bilingual_str>& warnings);
 
-    /**
-     * Wallet staking coins.
-     */
-    boost::thread_group* stakeThread = nullptr;
-    void StakeCoins(bool fStake);
-
 public:
     /**
      * Main wallet lock.
@@ -921,15 +915,6 @@ public:
 
     //! Add a descriptor to the wallet, return a ScriptPubKeyMan & associated output type
     ScriptPubKeyMan* AddWalletDescriptor(WalletDescriptor& desc, const FlatSigningProvider& signing_provider, const std::string& label, bool internal);
-
-    /* Start staking */
-    void StartStake();
-
-    /* Is staking closing */
-    bool IsStakeClosing();
-
-    /* Stop staking */
-    void StopStake();
 
     /* Clean coinstake transactions */
     void CleanCoinStake();

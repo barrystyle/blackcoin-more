@@ -2870,11 +2870,6 @@ void CWallet::postInitProcess()
 
     // Update wallet transactions with current mempool transactions.
     chain().requestMempoolTransactions(*this);
-
-    // Start mine proof-of-stake blocks in the background
-    if (CanStake()) {
-        StartStake();
-    }
 }
 
 bool CWallet::BackupWallet(const std::string& strDest) const
@@ -3298,40 +3293,8 @@ ScriptPubKeyMan* CWallet::AddWalletDescriptor(WalletDescriptor& desc, const Flat
     return spk_man;
 }
 
-void CWallet::StakeCoins(bool fStake)
-{
-    ::StakeCoins(fStake, this, stakeThread);
-}
-
-void CWallet::StartStake()
-{
-    m_enabled_staking = true;
-    StakeCoins(true);
-}
-
-void CWallet::StopStake()
-{
-    if (!stakeThread) {
-        if (m_enabled_staking)
-            m_enabled_staking = false;
-    }
-    else {
-        m_stop_staking_thread = true;
-        m_enabled_staking = false;
-        StakeCoins(false);
-        stakeThread = 0;
-        m_stop_staking_thread = false;
-    }
-}
-
-bool CWallet::IsStakeClosing()
-{
-    return chain().shutdownRequested() || m_stop_staking_thread;
-}
-
 void CWallet::CleanCoinStake()
 {
-    auto locked_chain = chain().lock();
     LOCK(cs_wallet);
     // Search the coinstake transactions and abandon transactions that are not confirmed in the blocks
     for (std::map<uint256, CWalletTx>::const_iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
