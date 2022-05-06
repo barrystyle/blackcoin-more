@@ -495,7 +495,7 @@ bool CheckStake(std::shared_ptr<CBlock> pblock, CWallet& wallet, ChainstateManag
 
     // verify hash target and signature of coinstake tx
     BlockValidationState state;
-    if (!CheckProofOfStake(chainman->BlockIndex()[pblock->hashPrevBlock], *pblock->vtx[1], pblock->nBits, state, chainstate.CoinsTip(), pblock->vtx[1]->nTime ? pblock->vtx[1]->nTime : pblock->nTime))
+    if (!CheckProofOfStake(chainman->BlockIndex()[pblock->hashPrevBlock], *pblock->vtx[1], pblock->nBits, state, chainstate->CoinsTip(), pblock->vtx[1]->nTime ? pblock->vtx[1]->nTime : pblock->nTime))
         return error("CheckStake() : proof-of-stake checking failed");
 
     //// debug print
@@ -522,6 +522,59 @@ bool CheckStake(std::shared_ptr<CBlock> pblock, CWallet& wallet, ChainstateManag
             return error("CheckStake() : ProcessNewBlock, block not accepted");
     }
     return true;
+}
+
+// novacoin: attempt to generate suitable proof-of-stake
+bool SignBlock(std::shared_ptr<CBlock> pblock, CWallet& wallet, int64_t& nFees, uint32_t nTime)
+{
+    // if we are trying to sign
+    // something except proof-of-stake block template
+    if (!pblock->vtx[0]->vout[0].IsEmpty()){
+        LogPrintf("SignBlock(): Trying to sign something except proof-of-stake block!\n");
+        return false;
+    }
+
+    // if we are trying to sign
+    // a complete proof-of-stake block
+    if (pblock->IsProofOfStake()) {
+        return true;
+    }
+
+    CKey key;
+    CMutableTransaction txCoinBase(*pblock->vtx[0]);
+    CMutableTransaction txCoinStake;
+    uint32_t nTimeBlock = nTime;
+    
+    LOCK(wallet.cs_wallet);
+
+    if (wallet.CreateCoinStake(pblock->nBits, 1, nFees, txCoinStake, key))
+    {
+        if (nTimeBlock >= pindexBestHeader->GetMedianTimePast()+1)
+        {
+            // make sure coinstake would meet timestamp protocol
+            // as it would be the same as the block timestamp
+            if (txCoinBase.nVersion < 2)
+                pblock->nTime = txCoinBase.nTime = txCoinStake.nTime = nTimeBlock;
+            else {
+                pblock->nTime = nTimeBlock;
+                txCoinBase.nTime = txCoinStake.nTime = 0;
+            }
+            pblock->vtx[0] = MakeTransactionRef(std::move(txCoinBase));
+
+            // we have to make sure that we have no future timestamps in
+            // our transactions set
+            for (std::vector<CTransactionRef>::iterator it = pblock->vtx.begin(); it != pblock->vtx.end();)
+                if (it->get()->nTime > pblock->nTime) { it = pblock->vtx.erase(it); } else { ++it; }
+
+            pblock->vtx.insert(pblock->vtx.begin() + 1, MakeTransactionRef(txCoinStake));
+            pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
+
+            // append a signature to our block
+            return key.Sign(pblock->GetHash(), pblock->vchBlockSig);
+        }
+    }
+
+    return false;
 }
 
 void PoSMiner(std::shared_ptr<CWallet> pwallet, ChainstateManager* chainman, CChainState* chainstate, CConnman* connman, CTxMemPool* mempool)
@@ -650,56 +703,4 @@ void InterruptStaking()
     threadStakeMiner.join();
 }
 
-// novacoin: attempt to generate suitable proof-of-stake
-bool SignBlock(std::shared_ptr<CBlock> pblock, CWallet& wallet, int64_t& nFees, uint32_t nTime)
-{
-    // if we are trying to sign
-    // something except proof-of-stake block template
-    if (!pblock->vtx[0]->vout[0].IsEmpty()){
-        LogPrintf("SignBlock(): Trying to sign something except proof-of-stake block!\n");
-        return false;
-    }
-
-    // if we are trying to sign
-    // a complete proof-of-stake block
-    if (pblock->IsProofOfStake()) {
-        return true;
-    }
-
-    CKey key;
-    CMutableTransaction txCoinBase(*pblock->vtx[0]);
-    CMutableTransaction txCoinStake;
-    uint32_t nTimeBlock = nTime;
-    
-    LOCK(wallet.cs_wallet);
-
-    if (wallet.CreateCoinStake(pblock->nBits, 1, nFees, txCoinStake, key))
-    {
-        if (nTimeBlock >= pindexBestHeader->GetMedianTimePast()+1)
-        {
-            // make sure coinstake would meet timestamp protocol
-            // as it would be the same as the block timestamp
-            if (txCoinBase.nVersion < 2)
-                pblock->nTime = txCoinBase.nTime = txCoinStake.nTime = nTimeBlock;
-            else {
-                pblock->nTime = nTimeBlock;
-                txCoinBase.nTime = txCoinStake.nTime = 0;
-            }
-            pblock->vtx[0] = MakeTransactionRef(std::move(txCoinBase));
-
-            // we have to make sure that we have no future timestamps in
-            // our transactions set
-            for (std::vector<CTransactionRef>::iterator it = pblock->vtx.begin(); it != pblock->vtx.end();)
-                if (it->get()->nTime > pblock->nTime) { it = pblock->vtx.erase(it); } else { ++it; }
-
-            pblock->vtx.insert(pblock->vtx.begin() + 1, MakeTransactionRef(txCoinStake));
-            pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
-
-            // append a signature to our block
-            return key.Sign(pblock->GetHash(), pblock->vchBlockSig);
-        }
-    }
-
-    return false;
-}
 #endif

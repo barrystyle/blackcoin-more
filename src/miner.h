@@ -220,10 +220,10 @@ int64_t UpdateTime(CBlock* pblock, const Consensus::Params& consensusParams, con
 /** Update an old GenerateCoinbaseCommitment from CreateNewBlock after the block txs have changed */
 void RegenerateCommitments(CBlock& block, ChainstateManager& chainman);
 
+#ifdef ENABLE_WALLET
 /** Sign proof-of-stake block */
 bool SignBlock(std::shared_ptr<CBlock> pblock, CWallet& wallet, int64_t& nFees, uint32_t nTime);
 
-#ifdef ENABLE_WALLET
 /** Mine proof-of-stake blocks */
 void MinePoS(std::shared_ptr<CWallet> pwallet, ChainstateManager* chainman, CChainState* chainstate, CConnman* connman, CTxMemPool* mempool);
 void InterruptStaking();
