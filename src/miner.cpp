@@ -22,6 +22,8 @@
 #include <timedata.h>
 #include <util/moneystr.h>
 #include <util/system.h>
+#include <util/thread.h>
+#include <util/threadnames.h>
 #ifdef ENABLE_WALLET
 #include <wallet/wallet.h>
 #endif
@@ -484,7 +486,7 @@ void IncrementExtraNonce(CBlock* pblock, const CBlockIndex* pindexPrev, unsigned
 }
 
 #ifdef ENABLE_WALLET
-bool CheckStake(std::shared_ptr<CBlock> pblock, CWallet& wallet, ChainstateManager& chainman, CChainState& chainstate)
+bool CheckStake(std::shared_ptr<CBlock> pblock, CWallet& wallet, ChainstateManager* chainman, CChainState* chainstate)
 {
     uint256 hashBlock = pblock->GetHash();
 
@@ -493,7 +495,7 @@ bool CheckStake(std::shared_ptr<CBlock> pblock, CWallet& wallet, ChainstateManag
 
     // verify hash target and signature of coinstake tx
     BlockValidationState state;
-    if (!CheckProofOfStake(chainman.BlockIndex()[pblock->hashPrevBlock], *pblock->vtx[1], pblock->nBits, state, chainstate.CoinsTip(), pblock->vtx[1]->nTime ? pblock->vtx[1]->nTime : pblock->nTime))
+    if (!CheckProofOfStake(chainman->BlockIndex()[pblock->hashPrevBlock], *pblock->vtx[1], pblock->nBits, state, chainstate.CoinsTip(), pblock->vtx[1]->nTime ? pblock->vtx[1]->nTime : pblock->nTime))
         return error("CheckStake() : proof-of-stake checking failed");
 
     //// debug print
@@ -599,7 +601,7 @@ void PoSMiner(std::shared_ptr<CWallet> pwallet, ChainstateManager* chainman, CCh
                         // increase priority
                         SetThreadPriority(THREAD_PRIORITY_ABOVE_NORMAL);
                         // Sign the full block
-                        CheckStake(pblock, *pwallet, *chainman, *chainstate);
+                        CheckStake(pblock, *pwallet, chainman, chainstate);
                         // return back to low priority
                         SetThreadPriority(THREAD_PRIORITY_LOWEST);
                         UninterruptibleSleep(std::chrono::milliseconds{500});
