@@ -553,7 +553,6 @@ bool MemPoolAccept::PreChecks(ATMPArgs& args, Workspace& ws)
     // -testnet/-regtest).
     if (fRequireStandard && tx.nVersion >= 2 && !Params().GetConsensus().IsProtocolV3_1(tx.nTime ? tx.nTime : GetAdjustedTime()))
 		return state.Invalid(TxValidationResult::TX_NOT_STANDARD, "premature-version2-tx");
-    }
 
     // Rather not work on nonstandard transactions (unless -testnet/-regtest)
     std::string reason;

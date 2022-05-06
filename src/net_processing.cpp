@@ -383,6 +383,9 @@ private:
 
     /** Send `feefilter` message. */
     void MaybeSendFeefilter(CNode& node, std::chrono::microseconds current_time) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    
+    /** Process net block headers. */
+    bool ProcessNetBlockHeaders(CNode* pfrom, const std::vector<CBlockHeader>& block, BlockValidationState& state, const CChainParams& chainparams, const CBlockIndex** ppindex=nullptr);
 
     const CChainParams& m_chainparams;
     CConnman& m_connman;
@@ -1187,9 +1190,6 @@ bool PeerManagerImpl::ProcessNetBlockHeaders(CNode* pfrom, const std::vector<CBl
     if(gArgs.GetBoolArg("-headerspamfilter", DEFAULT_HEADER_SPAM_FILTER))
     {
         LOCK(cs_main);
-        //Blackcoin ToDo
-        //CNodeState *nodestate = State(pfrom->GetId());
-        //CNodeHeaders& headers = ServiceHeaders(nodestate->address);
         CNodeHeaders& headers = ServiceHeaders(pfrom->GetAddrLocal());
         const CBlockIndex *pindexLast = ppindex == nullptr ? nullptr : *ppindex;
         headers.addHeaders(pindexFirst, pindexLast);

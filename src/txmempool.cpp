@@ -12,6 +12,7 @@
 #include <policy/policy.h>
 #include <policy/settings.h>
 #include <reverse_iterator.h>
+#include <timedata.h>
 #include <util/moneystr.h>
 #include <util/system.h>
 #include <util/time.h>
@@ -418,6 +419,7 @@ void CTxMemPool::removeUnchecked(txiter it, MemPoolRemovalReason reason)
         GetMainSignals().TransactionRemovedFromMempool(it->GetSharedTx(), reason, mempool_sequence);
     }
 
+    const uint256 hash = it->GetTx().GetHash();
     for (const CTxIn& txin : it->GetTx().vin)
         mapNextTx.erase(txin.prevout);
 
@@ -936,7 +938,7 @@ bool CCoinsViewMemPool::GetCoin(const COutPoint &outpoint, Coin &coin) const {
 void CCoinsViewMemPool::PackageAddTransaction(const CTransactionRef& tx)
 {
     for (unsigned int n = 0; n < tx->vout.size(); ++n) {
-        m_temp_added.emplace(COutPoint(tx->GetHash(), n), Coin(tx->vout[n], MEMPOOL_HEIGHT, false));
+        m_temp_added.emplace(COutPoint(tx->GetHash(), n), Coin(tx->vout[n], MEMPOOL_HEIGHT, false, tx->IsCoinStake(), tx->nTime));
     }
 }
 

@@ -1805,7 +1805,7 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
 #endif
 
     if (HasWallets() && GetWallets()[0] && gArgs.GetBoolArg("-staking", DEFAULT_STAKE)) {
-        MinePoS(GetWallets()[0], &node.chainman->ActiveChainstate(), node.connman.get(), node.mempool.get());
+        MinePoS(GetWallets()[0], node.chainman.get(), &node.chainman->ActiveChainstate(), node.connman.get(), node.mempool.get());
     }
 
     return true;
