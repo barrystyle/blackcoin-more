@@ -241,9 +241,8 @@ public:
     {
         LOCK(m_wallet->cs_wallet);
         CTransactionRef tx;
-        FeeCalculation fee_calc_out;
         if (!m_wallet->CreateTransaction(recipients, tx, fee, change_pos,
-                fail_reason, coin_control, fee_calc_out, sign)) {
+                fail_reason, coin_control, sign)) {
             return {};
         }
         return tx;
