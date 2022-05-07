@@ -1186,7 +1186,7 @@ void PeerManagerImpl::PushNodeVersion(CNode& pnode, int64_t nTime)
 bool PeerManagerImpl::ProcessNetBlockHeaders(CNode* pfrom, const std::vector<CBlockHeader>& block, BlockValidationState& state, const CChainParams& chainparams, const CBlockIndex** ppindex=nullptr)
 {
     const CBlockIndex *pindexFirst = nullptr;
-    bool ret = ProcessNewBlockHeaders(block, state, chainparams, ppindex, &pindexFirst);
+    bool ret = m_chainman.ProcessNewBlockHeaders(block, state, chainparams, ppindex, &pindexFirst);
     if(gArgs.GetBoolArg("-headerspamfilter", DEFAULT_HEADER_SPAM_FILTER))
     {
         LOCK(cs_main);
@@ -2188,7 +2188,7 @@ void PeerManagerImpl::ProcessHeadersMessage(CNode& pfrom, const Peer& peer,
     }
 
     BlockValidationState state;
-    if (!ProcessNetBlockHeaders(pfrom, headers, state, m_chainparams, &pindexLast)) {
+    if (!ProcessNetBlockHeaders(&pfrom, headers, state, m_chainparams, &pindexLast)) {
         if (state.IsInvalid()) {
             MaybePunishNodeForBlock(pfrom.GetId(), state, via_compact_block, "invalid header received");
             return;
@@ -3519,7 +3519,7 @@ void PeerManagerImpl::ProcessMessage(CNode& pfrom, const std::string& msg_type, 
 
         const CBlockIndex *pindex = nullptr;
         BlockValidationState state;
-        if (!ProcessNetBlockHeaders(pfrom, {cmpctblock.header}, state, m_chainparams, &pindex)) {
+        if (!ProcessNetBlockHeaders(&pfrom, {cmpctblock.header}, state, m_chainparams, &pindex)) {
             if (state.IsInvalid()) {
                 MaybePunishNodeForBlock(pfrom.GetId(), state, /*via_compact_block*/ true, "invalid header via cmpctblock");
                 return;

@@ -644,7 +644,7 @@ bool MemPoolAccept::PreChecks(ATMPArgs& args, Workspace& ws)
     }
 
     // Blackcoin: Minimum fee check
-    if (Params().GetConsensus().IsProtocolV3_1(tx.nTime ? tx.nTime : GetAdjustedTime()) && nFees < GetMinFee(tx, tx.nTime ? tx.nTime : GetAdjustedTime()))
+    if (Params().GetConsensus().IsProtocolV3_1(tx.nTime ? tx.nTime : GetAdjustedTime()) && ws.m_base_fees < GetMinFee(tx, tx.nTime ? tx.nTime : GetAdjustedTime()))
         return state.Invalid(TxValidationResult::TX_CONSENSUS, "bad-txns-fee-not-enough");
 
     // Check for non-standard pay-to-script-hash in inputs
@@ -1522,15 +1522,15 @@ bool CChainState::ConnectBlock(const CBlock& block, BlockValidationState& state,
 
     // Blackcoin
     // Check for the last proof of work block
-    if (block.IsProofOfWork() && pindex->nHeight > chainparams.GetConsensus().nLastPOWBlock)
+    if (block.IsProofOfWork() && pindex->nHeight > m_params.GetConsensus().nLastPOWBlock)
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "reject-pow", strprintf("%s: reject proof-of-work at height %d", __func__, pindex->nHeight));
     
     // Check difficulty 
-    if (block.nBits != GetNextTargetRequired(pindex->pprev, chainparams.GetConsensus(), block.IsProofOfStake()))
+    if (block.nBits != GetNextTargetRequired(pindex->pprev, m_params.GetConsensus(), block.IsProofOfStake()))
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "bad-diffbits", strprintf("%s: incorrect %s", __func__, block.IsProofOfWork() ? "proof-of-work" : "proof-of-stake"));
 
     // Check proof-of-stake
-    if (block.IsProofOfStake() && chainparams.GetConsensus().IsProtocolV3(block.GetBlockTime()) && !CheckProofOfStake(pindex->pprev, *block.vtx[1], block.nBits, state, view, block.vtx[1]->nTime ? block.vtx[1]->nTime : block.nTime)) {
+    if (block.IsProofOfStake() && m_params.GetConsensus().IsProtocolV3(block.GetBlockTime()) && !CheckProofOfStake(pindex->pprev, *block.vtx[1], block.nBits, state, view, block.vtx[1]->nTime ? block.vtx[1]->nTime : block.nTime)) {
         LogPrintf("WARNING: %s: check proof-of-stake failed for block %s\n", __func__, block.GetHash().ToString());
         return false; // do not error here as we expect this during initial block download
     }
@@ -1601,7 +1601,7 @@ bool CChainState::ConnectBlock(const CBlock& block, BlockValidationState& state,
     // Enforce BIP68 (sequence locks)
     int nLockTimeFlags = 0;
     //if (DeploymentActiveAt(*pindex, m_params.GetConsensus(), Consensus::DEPLOYMENT_CSV)) {
-    if (chainparams.GetConsensus().IsProtocolV3_1(pindex->GetBlockTime())) {
+    if (m_params.GetConsensus().IsProtocolV3_1(pindex->GetBlockTime())) {
         nLockTimeFlags |= LOCKTIME_VERIFY_SEQUENCE;
     }
 
@@ -1710,7 +1710,7 @@ bool CChainState::ConnectBlock(const CBlock& block, BlockValidationState& state,
         }
     }
 
-    if (block.IsProofOfStake() && chainparams.GetConsensus().IsProtocolV3(block.GetBlockTime())) {
+    if (block.IsProofOfStake() && m_params.GetConsensus().IsProtocolV3(block.GetBlockTime())) {
         CAmount blockReward = nFees + GetProofOfStakeSubsidy();
         if (nActualStakeReward > blockReward) {
             LogPrintf("ERROR: ConnectBlock(): coinstake pays too much (actual=%d vs limit=%d)\n", nActualStakeReward, blockReward);
@@ -2768,9 +2768,9 @@ static bool CheckBlockSignature(const CBlock& block)
 
     std::vector<valtype> vSolutions;
     const CTxOut& txout = block.vtx[1]->vout[1];
-    txnouttype whichType = Solver(txout.scriptPubKey, vSolutions);
+    TxoutType whichType = Solver(txout.scriptPubKey, vSolutions);
 
-    if (whichType == TX_PUBKEY) {
+    if (whichType == TxoutType::PUBKEY) {
         vector<unsigned char>& vchPubKey = vSolutions[0];
         return CPubKey(vchPubKey).Verify(block.GetHash(), block.vchBlockSig);
     }

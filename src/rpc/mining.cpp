@@ -451,7 +451,9 @@ static RPCHelpMan getmininginfo()
     };
 }
 
-UniValue getstakinginfo(const JSONRPCRequest& request)
+/*
+// Blackcoin ToDo: Adapt this RPC call
+UniValue getstakinginfo()
 {
     if (request.fHelp || request.params.size() != 0)
         throw std::runtime_error(
@@ -479,6 +481,9 @@ UniValue getstakinginfo(const JSONRPCRequest& request)
     int64_t nTargetSpacing = Params().GetConsensus().nTargetSpacing;
     uint64_t nExpectedTime = staking ? 1.0455 * nTargetSpacing * nNetworkWeight / nWeight : 0;
 
+    NodeContext& node = EnsureAnyNodeContext(request.context);
+    const CTxMemPool& mempool = EnsureMemPool(node);
+
     UniValue obj(UniValue::VOBJ);
 
     obj.pushKV("enabled", gArgs.GetBoolArg("-staking", DEFAULT_STAKE));
@@ -498,6 +503,7 @@ UniValue getstakinginfo(const JSONRPCRequest& request)
 
     return obj;
 }
+*/
 
 
 // NOTE: Unlike wallet RPC (which use BTC values), mining RPCs follow GBT (BIP 22) in using satoshi amounts
@@ -734,7 +740,7 @@ static RPCHelpMan getblocktemplate()
         }
     }
 
-    if (::ChainActive().Tip()->nHeight > Params().GetConsensus().nLastPOWBlock)
+    if (active_chain.Tip()->nHeight > Params().GetConsensus().nLastPOWBlock)
     	throw JSONRPCError(RPC_MISC_ERROR, "No more PoW blocks");
 
     static unsigned int nTransactionsUpdatedLast;
@@ -1113,6 +1119,7 @@ static RPCHelpMan submitheader()
     };
 }
 
+/*
 // Blackcoin ToDo: check and finalize?
 UniValue checkkernel(const JSONRPCRequest& request)
 {
@@ -1125,11 +1132,11 @@ UniValue checkkernel(const JSONRPCRequest& request)
                                 {
                                     {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id"},
                                     {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number"},
-                                    {"sequence", RPCArg::Type::NUM, /* default */ "depends on the value of the 'locktime' argument", "The sequence number"},
+                                    {"sequence", RPCArg::Type::NUM, "depends on the value of the 'locktime' argument", "The sequence number"},
                                 }},
                         },
                     },
-                    {"createblocktemplate", RPCArg::Type::BOOL, /* default */ "false", "Create block template?"},
+                    {"createblocktemplate", RPCArg::Type::BOOL, "false", "Create block template?"},
                 },
                 RPCResult{
                     RPCResult::Type::OBJ, "", "",
@@ -1236,18 +1243,16 @@ UniValue checkkernel(const JSONRPCRequest& request)
         result.pushKV("blocktemplate", HexStr(ss.begin(), ss.end()));
         result.pushKV("blocktemplatefees", nFees);
 
-        /*
-
         // Reserve a new key pair from key pool
         if (!pwallet->CanGetAddresses(true)) {
             throw JSONRPCError(RPC_WALLET_ERROR, "Error: This wallet has no available keys");
         }
 
         result.pushKV("blocktemplatesignkey", HexStr(pubkey));
-        */
 #endif
         return result;
 }
+*/
 
 // Blackcoin ToDo: check if it returns correct value
 static RPCHelpMan estimatefee()
@@ -1295,12 +1300,12 @@ static const CRPCCommand commands[] =
   //  ---------------------  -----------------------
     { "mining",              &getnetworkhashps,        },
     { "mining",              &getmininginfo,           },
-    { "mining",              &getstakinginfo,          },
+    //{ "mining",              &getstakinginfo,          },
     { "mining",              &prioritisetransaction,   },
     { "mining",              &getblocktemplate,        },
     { "mining",              &submitblock,             },
     { "mining",              &submitheader,            },
-    { "mining",              &checkkernel,             },
+    //{ "mining",              &checkkernel,             },
 
     { "generating",          &generatetoaddress,       },
     { "generating",          &generatetodescriptor,    },
