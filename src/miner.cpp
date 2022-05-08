@@ -14,6 +14,7 @@
 #include <consensus/tx_verify.h>
 #include <consensus/validation.h>
 #include <deploymentstatus.h>
+#include <net_processing.h>
 #include <policy/feerate.h>
 #include <policy/policy.h>
 #include <pos.h>
@@ -494,9 +495,12 @@ bool CheckStake(std::shared_ptr<CBlock> pblock, CWallet& wallet, ChainstateManag
         return error("CheckStake() : %s is not a proof-of-stake block", hashBlock.GetHex());
 
     // verify hash target and signature of coinstake tx
-    BlockValidationState state;
-    if (!CheckProofOfStake(chainman->BlockIndex()[pblock->hashPrevBlock], *pblock->vtx[1], pblock->nBits, state, chainstate->CoinsTip(), pblock->vtx[1]->nTime ? pblock->vtx[1]->nTime : pblock->nTime))
-        return error("CheckStake() : proof-of-stake checking failed");
+    {
+        LOCK(cs_main);
+        BlockValidationState state;
+        if (!CheckProofOfStake(chainman->BlockIndex()[pblock->hashPrevBlock], *pblock->vtx[1], pblock->nBits, state, chainstate->CoinsTip(), pblock->vtx[1]->nTime ? pblock->vtx[1]->nTime : pblock->nTime))
+            return error("CheckStake() : proof-of-stake checking failed");
+    }
 
     //// debug print
     LogPrint(BCLog::COINSTAKE, "CheckStake() : new proof-of-stake block found  \n  hash: %s \n", hashBlock.GetHex());
@@ -508,19 +512,22 @@ bool CheckStake(std::shared_ptr<CBlock> pblock, CWallet& wallet, ChainstateManag
         LOCK(cs_main);
         if (pblock->hashPrevBlock != chainstate->m_chain.Tip()->GetBlockHash())
             return error("CheckStake() : generated block is stale");
-
+    }
+    {
+        LOCK(wallet.cs_wallet);
         for (const CTxIn& vin : pblock->vtx[1]->vin) {
             if (wallet.IsSpent(vin.prevout.hash, vin.prevout.n)) {
                 return error("CheckStake() : generated block became invalid due to stake UTXO being spent");
             }
         }
-
-        // Process this block the same as if we had received it from another node
-        std::shared_ptr<const CBlock> shared_pblock =
-                    std::make_shared<const CBlock>(*pblock);
-        if (!chainman->ProcessNewBlock(Params(), shared_pblock, true, NULL))
-            return error("CheckStake() : ProcessNewBlock, block not accepted");
     }
+
+    // Process this block the same as if we had received it from another node
+    std::shared_ptr<const CBlock> shared_pblock =
+                std::make_shared<const CBlock>(*pblock);
+    if (!chainman->ProcessNewBlock(Params(), shared_pblock, true, NULL))
+        return error("CheckStake() : ProcessNewBlock, block not accepted");
+
     return true;
 }
 

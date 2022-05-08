@@ -336,4 +336,6 @@ bool CheckMinimalPush(const std::vector<unsigned char>& data, opcodetype opcode)
 
 int FindAndDelete(CScript& script, const CScript& b);
 
+bool IsCompressedOrUncompressedPubKey(const valtype &vchPubKey);
+
 #endif // BITCOIN_SCRIPT_INTERPRETER_H

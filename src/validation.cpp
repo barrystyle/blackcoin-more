@@ -984,7 +984,7 @@ int64_t FutureDrift(int64_t nTime)
 {
     // loose policy for FutureDrift in regtest mode
     if (Params().GetConsensus().fPowNoRetargeting && ::ChainActive().Height() <= Params().GetConsensus().nLastPOWBlock) {
-             return nTime + 24 * 60 * 60;
+        return nTime + 24 * 60 * 60;
     }
     return Params().GetConsensus().IsProtocolV2(nTime) ? nTime + 15 : nTime + 10 * 60;
 }
@@ -1150,7 +1150,8 @@ void UpdateCoins(const CTransaction& tx, CCoinsViewCache& inputs, int nHeight)
 
 bool CScriptCheck::operator()() {
     const CScript &scriptSig = ptxTo->vin[nIn].scriptSig;
-    return VerifyScript(scriptSig, m_tx_out.scriptPubKey, nFlags, CachingTransactionSignatureChecker(ptxTo, nIn, m_tx_out.nValue, cacheStore, *txdata), &error);
+    const CScriptWitness *witness = &ptxTo->vin[nIn].scriptWitness;
+    return VerifyScript(scriptSig, m_tx_out.scriptPubKey, witness, nFlags, CachingTransactionSignatureChecker(ptxTo, nIn, m_tx_out.nValue, cacheStore, *txdata), &error);
 }
 
 int BlockManager::GetSpendHeight(const CCoinsViewCache& inputs)
@@ -3060,8 +3061,9 @@ static bool ContextualCheckBlock(const CBlock& block, BlockValidationState& stat
     // BIP34 is always active
     CScript expect = CScript() << nHeight;
     if (block.vtx[0]->vin[0].scriptSig.size() < expect.size() ||
-            !std::equal(expect.begin(), expect.end(), block.vtx[0]->vin[0].scriptSig.begin())) {
-            return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cb-height", "block height mismatch in coinbase");
+        !std::equal(expect.begin(), expect.end(), block.vtx[0]->vin[0].scriptSig.begin())) {
+        return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cb-height", "block height mismatch in coinbase");
+    }
 
     // Validation for witness commitments.
     // * We compute the witness hash (which is the hash including witnesses) of all the block's transactions, except the
