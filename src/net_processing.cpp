@@ -1183,7 +1183,7 @@ void PeerManagerImpl::PushNodeVersion(CNode& pnode, int64_t nTime)
     }
 }
 
-bool PeerManagerImpl::ProcessNetBlockHeaders(CNode* pfrom, const std::vector<CBlockHeader>& block, BlockValidationState& state, const CChainParams& chainparams, const CBlockIndex** ppindex=nullptr)
+bool PeerManagerImpl::ProcessNetBlockHeaders(CNode* pfrom, const std::vector<CBlockHeader>& block, BlockValidationState& state, const CChainParams& chainparams, const CBlockIndex** ppindex)
 {
     const CBlockIndex *pindexFirst = nullptr;
     bool ret = m_chainman.ProcessNewBlockHeaders(block, state, chainparams, ppindex, &pindexFirst);
