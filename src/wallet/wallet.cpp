@@ -790,41 +790,6 @@ void CWallet::MarkDirty()
     }
 }
 
-bool CWallet::MarkReplaced(const uint256& originalHash, const uint256& newHash)
-{
-    LOCK(cs_wallet);
-
-    auto mi = mapWallet.find(originalHash);
-
-    // There is a bug if MarkReplaced is not called on an existing wallet transaction.
-    assert(mi != mapWallet.end());
-
-    CWalletTx& wtx = (*mi).second;
-
-    // Ensure for now that we're not overwriting data
-    assert(wtx.mapValue.count("replaced_by_txid") == 0);
-
-    wtx.mapValue["replaced_by_txid"] = newHash.ToString();
-
-    // Refresh mempool status without waiting for transactionRemovedFromMempool
-    // notification so the wallet is in an internally consistent state and
-    // immediately knows the old transaction should not be considered trusted
-    // and is eligible to be abandoned
-    wtx.fInMempool = chain().isInMempool(originalHash);
-
-    WalletBatch batch(GetDatabase());
-
-    bool success = true;
-    if (!batch.WriteTx(wtx)) {
-        WalletLogPrintf("%s: Updating batch tx %s failed\n", __func__, wtx.GetHash().ToString());
-        success = false;
-    }
-
-    NotifyTransactionChanged(originalHash, CT_UPDATED);
-
-    return success;
-}
-
 void CWallet::SetSpentKeyState(WalletBatch& batch, const uint256& hash, unsigned int n, bool used, std::set<CTxDestination>& tx_destinations)
 {
     AssertLockHeld(cs_wallet);
@@ -3380,7 +3345,7 @@ void CWallet::AvailableCoinsForStaking(std::vector<COutput>& vCoins) const
                 std::set<uint256> trusted_parents;
                 if (!(IsSpent(wtxid, i)) && mine != ISMINE_NO &&
                     !IsLockedCoin((*it).first, i) && (pcoin->tx->vout[i].nValue > 0)) {
-                        vCoins.push_back(COutput(pcoin, i, nDepth, spendable, solvable, pcoin->IsTrusted(locked_chain, trusted_parents)));
+                        vCoins.push_back(COutput(pcoin, i, nDepth, spendable, solvable, pcoin->IsTrusted()));
                     }
             }
         }
@@ -3431,7 +3396,7 @@ bool CWallet::SelectCoinsForStaking(CAmount& nTargetValue, std::set<std::pair<co
 typedef std::vector<unsigned char> valtype;
 bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmount& nFees, CMutableTransaction& tx, CKey& key)
 {
-    CBlockIndex* pindexPrev = ::ChainActive().Tip();
+    CBlockIndex* pindexPrev = chain().getTip();
     arith_uint256 bnTargetPerCoinDay;
     bnTargetPerCoinDay.SetCompact(nBits);
 
@@ -3476,7 +3441,7 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
         for (const std::pair<const CWalletTx*, unsigned int> &pcoin : setCoins) {
             boost::this_thread::interruption_point();
             COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
-            CacheKernel(stakeCache, prevoutStake, pindexPrev, ::ChainstateActive().CoinsTip()); // this will do a 2 disk loads per op
+            CacheKernel(stakeCache, prevoutStake, pindexPrev, chain().getCoinsTip()); // this will do a 2 disk loads per op
         }
     }
 
@@ -3486,13 +3451,13 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
     {
         static int nMaxStakeSearchInterval = 60;
         bool fKernelFound = false;
-        for (unsigned int n=0; n<min(nSearchInterval,(int64_t)nMaxStakeSearchInterval) && !fKernelFound && pindexPrev == ::ChainActive().Tip(); n++)
+        for (unsigned int n=0; n<min(nSearchInterval,(int64_t)nMaxStakeSearchInterval) && !fKernelFound && pindexPrev == chain().getCoinsTip(); n++)
         {
             boost::this_thread::interruption_point();
             // Search backward in time from the given txNew timestamp
             // Search nSearchInterval seconds back up to nMaxStakeSearchInterval
             COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
-            if (CheckKernel(pindexPrev, nBits, txNew.nTime - n, prevoutStake, ::ChainstateActive().CoinsTip(), stakeCache))
+            if (CheckKernel(pindexPrev, nBits, txNew.nTime - n, prevoutStake, chain().getCoinsTip(), stakeCache))
             {
                 // Found a kernel
                 LogPrint(BCLog::COINSTAKE, "CreateCoinStake : kernel found\n");
@@ -3500,7 +3465,6 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
                 CScript scriptPubKeyOut;
                 scriptPubKeyKernel = pcoin.first->tx->vout[pcoin.second].scriptPubKey;
                 TxoutType whichType = Solver(scriptPubKeyKernel, vSolutions);
-                if (!Solver(scriptPubKeyKernel, vSolutions))
                 if (whichType == TxoutType::NONSTANDARD)
                 {
                     LogPrint(BCLog::COINSTAKE, "CreateCoinStake : failed to parse kernel\n");

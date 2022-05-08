@@ -348,7 +348,9 @@ public:
     void setConfirmed() { m_confirm.status = CWalletTx::CONFIRMED; }
     const uint256& GetHash() const { return tx->GetHash(); }
     bool IsCoinBase() const { return tx->IsCoinBase(); }
+    bool IsCoinStake() const { return tx->IsCoinStake(); }
     bool IsImmatureCoinBase() const;
+    bool IsImmatureCoinStake() const;
 
     // Disable copying of CWalletTx objects to prevent bugs where instances get
     // copied in and out of the mapWallet map, and fields are updated in the

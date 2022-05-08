@@ -638,7 +638,7 @@ bool CWallet::CreateTransactionInternal(
     }
 
     // Set discard feerate
-    coin_selection_params.m_discard_feerate = GetDiscardRate(*this);
+    coin_selection_params.m_discard_feerate = chain().relayDustFee();
 
     // Get the fee rate to use effective values in coin selection
     coin_selection_params.m_effective_feerate = *(coin_control.m_feerate);
@@ -730,7 +730,7 @@ bool CWallet::CreateTransactionInternal(
     // to avoid conflicting with other possible uses of nSequence,
     // and in the spirit of "smallest possible change from prior
     // behavior."
-    const uint32_t nSequence = coin_control.m_signal_bip125_rbf.value_or(m_signal_rbf) ? MAX_BIP125_RBF_SEQUENCE : (CTxIn::SEQUENCE_FINAL - 1);
+    const uint32_t nSequence = CTxIn::SEQUENCE_FINAL - 1;
     for (const auto& coin : selected_coins) {
         txNew.vin.push_back(CTxIn(coin.outpoint, CScript(), nSequence));
     }

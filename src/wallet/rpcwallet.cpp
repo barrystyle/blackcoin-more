@@ -119,7 +119,7 @@ void EnsureWalletIsUnlocked(const CWallet& wallet)
     if (wallet.IsLocked()) {
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
     }
-    if (pwallet.m_wallet_unlock_staking_only) {
+    if (wallet.m_wallet_unlock_staking_only) {
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Wallet is unlocked for staking only.");
     }
 }
@@ -2111,22 +2111,34 @@ static RPCHelpMan encryptwallet()
     };
 }
 
-UniValue reservebalance(const JSONRPCRequest& request)
+static RPCHelpMan reservebalance()
 {
-    std::shared_ptr<CWallet> const wallet = GetWalletForJSONRPCRequest(request);
-    CWallet* const pwallet = wallet.get();
+    return RPCHelpMan{"reservebalance",
+            "\nSet reserve amount not participating in network protection."
+            "\nIf no parameters provided current setting is printed.\n",
+            {
+                {"reserve", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,"is true or false to turn balance reserve on or off."},
+                {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED, "is a real and rounded to cent."},
+            },
+            RPCResult{
+                RPCResult::Type::OBJ, "", "",
+                {
+                    {RPCResult::Type::BOOL, "reserve", "Balance reserve on or off"},
+                    {RPCResult::Type::STR_AMOUNT, "amount", "Amount reserve rounded to cent"}
+                }
+            },
+             RPCExamples{
+            "\nSet reserve balance to 100\n"
+            + HelpExampleCli("reservebalance", "true 100") +
+            "\nSet reserve balance to 0\n"
+            + HelpExampleCli("reservebalance", "false") +
+            "\nGet reserve balance\n"
+            + HelpExampleCli("reservebalance", "")			},
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
 
-    if (!EnsureWalletIsAvailable(pwallet, request.fHelp)) {
-        return NullUniValue;
-    }
-
-    if (request.fHelp || request.params.size() > 2)
-        throw std::runtime_error(
-            "reservebalance [<reserve> [amount]]\n"
-            "<reserve> is true or false to turn balance reserve on or off.\n"
-            "<amount> is a real and rounded to cent.\n"
-            "Set reserve amount not participating in network protection.\n"
-            "If no parameters provided current setting is printed.\n");
+    std::shared_ptr<CWallet> const pwallet = GetWalletForJSONRPCRequest(request);
+    if (!pwallet) return NullUniValue;
 
     if (request.params.size() > 0)
     {
@@ -2153,6 +2165,8 @@ UniValue reservebalance(const JSONRPCRequest& request)
     result.pushKV("reserve", (pwallet->m_reserve_balance > 0));
     result.pushKV("amount", ValueFromAmount(pwallet->m_reserve_balance));
     return result;
+},
+    };
 }
 
 static RPCHelpMan lockunspent()
@@ -3611,7 +3625,7 @@ UniValue burnwallet(const JSONRPCRequest& request)
 
 // ///////////////////////////////////////////////////////////////////// ** em52
 //  new rpc added by Remy5
-
+/*
 struct StakePeriodRange_T {
     int64_t Start;
     int64_t End;
@@ -3854,6 +3868,7 @@ UniValue getstakereport(const UniValue& params, bool fHelp)
 
     return result;
 }
+*/
 
 class DescribeWalletAddressVisitor
 {
