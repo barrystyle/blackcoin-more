@@ -983,9 +983,10 @@ CAmount GetProofOfStakeSubsidy()
 int64_t FutureDrift(int64_t nTime)
 {
     // loose policy for FutureDrift in regtest mode
-    if (Params().GetConsensus().fPowNoRetargeting && m_active_chainstate.m_chain.Height() <= Params().GetConsensus().nLastPOWBlock) {
-        return nTime + 24 * 60 * 60;
-    }
+    //Blackcoin ToDO: ENABLE!
+    //if (Params().GetConsensus().fPowNoRetargeting && m_active_chainstate.m_chain.Height() <= Params().GetConsensus().nLastPOWBlock) {
+    //    return nTime + 24 * 60 * 60;
+    //}
     return Params().GetConsensus().IsProtocolV2(nTime) ? nTime + 15 : nTime + 10 * 60;
 }
 
@@ -1333,11 +1334,8 @@ int ApplyTxInUndo(Coin&& undo, CCoinsViewCache& view, const COutPoint& out)
 
 /** Undo the effects of this block (with given index) on the UTXO set represented by coins.
  *  When FAILED is returned, view is left in an indeterminate state. */
-DisconnectResult CChainState::DisconnectBlock(const CBlock& block, const CBlockIndex* pindex, CCoinsViewCache& view, bool* pfClean)
+DisconnectResult CChainState::DisconnectBlock(const CBlock& block, const CBlockIndex* pindex, CCoinsViewCache& view)
 {
-    assert(pindex->GetBlockHash() == view.GetBestBlock());
-    if (pfClean)
-        *pfClean = false;
     bool fClean = true;
 
     CBlockUndo blockUndo;
@@ -2021,7 +2019,7 @@ bool CChainState::DisconnectTip(BlockValidationState& state, DisconnectedBlockTr
     {
         CCoinsViewCache view(&CoinsTip());
         assert(view.GetBestBlock() == pindexDelete->GetBlockHash());
-        if (DisconnectBlock(block, pindexDelete, view, nullptr) != DISCONNECT_OK)
+        if (DisconnectBlock(block, pindexDelete, view) != DISCONNECT_OK)
             return error("DisconnectTip(): DisconnectBlock %s failed", pindexDelete->GetBlockHash().ToString());
         bool flushed = view.Flush();
         assert(flushed);
@@ -3022,8 +3020,9 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, BlockValidatio
         return state.Invalid(BlockValidationResult::BLOCK_TIME_FUTURE, "time-too-new", "block timestamp too far in the future");
 
     // Check maximum reorg depth
-    if (m_active_chainstate.m_chain.Height() - nHeight >= consensusParams.nMaxReorganizationDepth)
-        return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "older-than-maxreorg-depth", strprintf("ContextualCheckBlockHeader(): forked chain older than max reorganization depth (height %d)", nHeight));
+    //Blackcoin ToDO: ENABLE!
+    //if (m_active_chainstate.m_chain.Height() - nHeight >= consensusParams.nMaxReorganizationDepth)
+        //return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "older-than-maxreorg-depth", strprintf("ContextualCheckBlockHeader(): forked chain older than max reorganization depth (height %d)", nHeight));
 
     return true;
 }
@@ -3303,9 +3302,9 @@ bool CChainState::AcceptBlock(const std::shared_ptr<const CBlock>& pblock, Block
         return error("%s: %s", __func__, state.ToString());
     }
 
-    // Header is valid/has work, merkle tree is good...RELAY NOW
+    // Header is valid/has work, merkle tree and segwit merkle tree are good...RELAY NOW
     // (but if it does not build on our best tip, let the SendMessages loop relay it)
-    if (!::ChainstateActive().IsInitialBlockDownload() && m_chain.Tip() == pindex->pprev)
+    if (!IsInitialBlockDownload() && m_chain.Tip() == pindex->pprev)
         GetMainSignals().NewPoWValidBlock(pindex, pblock);
 
     // Write block to history file
@@ -3898,8 +3897,7 @@ bool CChainState::ReplayBlocks()
                 return error("RollbackBlock(): ReadBlockFromDisk() failed at %d, hash=%s", pindexOld->nHeight, pindexOld->GetBlockHash().ToString());
             }
             LogPrintf("Rolling back %s (%i)\n", pindexOld->GetBlockHash().ToString(), pindexOld->nHeight);
-            bool fClean=true;
-            DisconnectResult res = DisconnectBlock(block, pindexOld, cache, &fClean);
+            DisconnectResult res = DisconnectBlock(block, pindexOld, cache);
             if (res == DISCONNECT_FAILED) {
                 return error("RollbackBlock(): DisconnectBlock failed at %d, hash=%s", pindexOld->nHeight, pindexOld->GetBlockHash().ToString());
             }
