@@ -18,7 +18,6 @@
 #include <util/system.h>
 #include <util/ui_change_type.h>
 #include <wallet/context.h>
-#include <wallet/fees.h>
 #include <wallet/ismine.h>
 #include <wallet/load.h>
 #include <wallet/rpcwallet.h>

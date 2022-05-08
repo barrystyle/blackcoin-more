@@ -250,7 +250,6 @@ BITCOIN_CORE_H = \
   util/check.h \
   util/epochguard.h \
   util/error.h \
-  util/fees.h \
   util/getuniquepath.h \
   util/golombrice.h \
   util/hash_type.h \
@@ -286,7 +285,6 @@ BITCOIN_CORE_H = \
   wallet/db.h \
   wallet/dump.h \
   wallet/external_signer_scriptpubkeyman.h \
-  wallet/fees.h \
   wallet/ismine.h \
   wallet/load.h \
   wallet/receive.h \
@@ -411,7 +409,6 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/db.cpp \
   wallet/dump.cpp \
   wallet/external_signer_scriptpubkeyman.cpp \
-  wallet/fees.cpp \
   wallet/interfaces.cpp \
   wallet/load.cpp \
   wallet/receive.cpp \
@@ -602,7 +599,6 @@ libbitcoin_util_a_SOURCES = \
   util/bip32.cpp \
   util/bytevectorhash.cpp \
   util/error.cpp \
-  util/fees.cpp \
   util/getuniquepath.cpp \
   util/hasher.cpp \
   util/sock.cpp \

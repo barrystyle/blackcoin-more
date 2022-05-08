@@ -6,11 +6,9 @@
 #include <interfaces/chain.h>
 #include <policy/policy.h>
 #include <util/check.h>
-#include <util/fees.h>
 #include <util/moneystr.h>
 #include <util/translation.h>
 #include <wallet/coincontrol.h>
-#include <wallet/fees.h>
 #include <wallet/receive.h>
 #include <wallet/spend.h>
 #include <wallet/transaction.h>

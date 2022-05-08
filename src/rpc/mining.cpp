@@ -417,7 +417,7 @@ static RPCHelpMan getmininginfo()
                     RPCResult::Type::OBJ, "", "",
                     {
                         {RPCResult::Type::NUM, "blocks", "The current block"},
-                        {RPCResult::Type::NUM, "currentblocksize", /* optional */ true, "The block size of the last assembled block (only present if a block was ever assembled)"},
+                        {RPCResult::Type::NUM, "currentblockweight", /* optional */ true, "The block weight of the last assembled block (only present if a block was ever assembled)"},
                         {RPCResult::Type::NUM, "currentblocktx", /* optional */ true, "The number of block transactions of the last assembled block (only present if a block was ever assembled)"},
                         {RPCResult::Type::NUM, "difficulty", "The current difficulty"},
                         {RPCResult::Type::NUM, "networkhashps", "The network hashes per second"},
@@ -451,18 +451,36 @@ static RPCHelpMan getmininginfo()
     };
 }
 
-/*
-// Blackcoin ToDo: Adapt this RPC call
-UniValue getstakinginfo()
+static RPCHelpMan getstakinginfo()
 {
-    if (request.fHelp || request.params.size() != 0)
-        throw std::runtime_error(
-            "getstakinginfo\n"
-            "Returns an object containing staking-related information.");
+    return RPCHelpMan{"getstakinginfo",
+                "\nReturns an object containing staking-related information.",
+                {},
+                RPCResult{
+                    RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::BOOL, "enabled", "'true' if staking is enabled"},
+                        {RPCResult::Type::BOOL, "staking", "'true' if wallet is currently staking"},
+                        {RPCResult::Type::STR, "errors", "error messages"},
+                        {RPCResult::Type::NUM, "pooledtx", "The size of the mempool"},
+                        {RPCResult::Type::NUM, "difficulty", "The current difficulty"},
+                        {RPCResult::Type::NUM, "search-interval", "The staker search interval"},
+                        {RPCResult::Type::NUM, "weight", "The staker weight"},
+                        {RPCResult::Type::NUM, "netstakeweight", "Network stake weight"},
+                        {RPCResult::Type::NUM, "expectedtime", "Expected time to earn reward"},
+                    }
+                },
+                RPCExamples{
+                    HelpExampleCli("getstakinginfo", "")
+            + HelpExampleRpc("getstakinginfo", "")
+                },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+
+    NodeContext& node = EnsureAnyNodeContext(request.context);
 
     uint64_t nWeight = 0;
     uint64_t lastCoinStakeSearchInterval = 0;
-
 #ifdef ENABLE_WALLET
     std::shared_ptr<CWallet> const wallet = GetWalletForJSONRPCRequest(request);
     CWallet* const pwallet = wallet.get();
@@ -471,30 +489,31 @@ UniValue getstakinginfo()
     {
         LOCK(pwallet->cs_wallet);
         nWeight = pwallet->GetStakeWeight();
-        lastCoinStakeSearchInterval = pwallet->m_last_coin_stake_search_interval;
+        lastCoinStakeSearchInterval = pwallet->m_enabled_staking ? pwallet->m_last_coin_stake_search_interval : 0;
     }
 #endif
+
+    LOCK(cs_main);
+    const CTxMemPool& mempool = EnsureMemPool(node);
 
     uint64_t nNetworkWeight = 1.1429 * GetPoSKernelPS();
     bool staking = lastCoinStakeSearchInterval && nWeight;
 
-    int64_t nTargetSpacing = Params().GetConsensus().nTargetSpacing;
+    const Consensus::Params& consensusParams = Params().GetConsensus();
+    int64_t nTargetSpacing = consensusParams.nTargetSpacing;
     uint64_t nExpectedTime = staking ? 1.0455 * nTargetSpacing * nNetworkWeight / nWeight : 0;
-
-    NodeContext& node = EnsureAnyNodeContext(request.context);
-    const CTxMemPool& mempool = EnsureMemPool(node);
 
     UniValue obj(UniValue::VOBJ);
 
     obj.pushKV("enabled", gArgs.GetBoolArg("-staking", DEFAULT_STAKE));
     obj.pushKV("staking", staking);
-    obj.pushKV("errors", GetWarnings("statusbar"));
+    obj.pushKV("errors", GetWarnings("statusbar").original);
 
     if (BlockAssembler::m_last_block_num_txs) obj.pushKV("currentblocktx", *BlockAssembler::m_last_block_num_txs);
     obj.pushKV("pooledtx", (uint64_t)mempool.size());
 
     obj.pushKV("difficulty", GetDifficulty(GetLastBlockIndex(pindexBestHeader, true)));
-    obj.pushKV("search-interval", (int)nLastCoinStakeSearchInterval);
+    obj.pushKV("search-interval", (int)lastCoinStakeSearchInterval);
 
     obj.pushKV("weight", (uint64_t)nWeight);
     obj.pushKV("netstakeweight", (uint64_t)nNetworkWeight);
@@ -502,9 +521,9 @@ UniValue getstakinginfo()
     obj.pushKV("expectedtime", nExpectedTime);
 
     return obj;
+},
+    };
 }
-*/
-
 
 // NOTE: Unlike wallet RPC (which use BTC values), mining RPCs follow GBT (BIP 22) in using satoshi amounts
 static RPCHelpMan prioritisetransaction()
@@ -1300,7 +1319,7 @@ static const CRPCCommand commands[] =
   //  ---------------------  -----------------------
     { "mining",              &getnetworkhashps,        },
     { "mining",              &getmininginfo,           },
-    //{ "mining",              &getstakinginfo,          },
+    { "mining",              &getstakinginfo,          },
     { "mining",              &prioritisetransaction,   },
     { "mining",              &getblocktemplate,        },
     { "mining",              &submitblock,             },
