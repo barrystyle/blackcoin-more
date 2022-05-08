@@ -983,7 +983,7 @@ CAmount GetProofOfStakeSubsidy()
 int64_t FutureDrift(int64_t nTime)
 {
     // loose policy for FutureDrift in regtest mode
-    if (Params().GetConsensus().fPowNoRetargeting && ::ChainActive().Height() <= Params().GetConsensus().nLastPOWBlock) {
+    if (Params().GetConsensus().fPowNoRetargeting && m_active_chainstate.m_chain.Height() <= Params().GetConsensus().nLastPOWBlock) {
         return nTime + 24 * 60 * 60;
     }
     return Params().GetConsensus().IsProtocolV2(nTime) ? nTime + 15 : nTime + 10 * 60;
@@ -3022,7 +3022,7 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, BlockValidatio
         return state.Invalid(BlockValidationResult::BLOCK_TIME_FUTURE, "time-too-new", "block timestamp too far in the future");
 
     // Check maximum reorg depth
-    if (::ChainActive().Height() - nHeight >= consensusParams.nMaxReorganizationDepth)
+    if (m_active_chainstate.m_chain.Height() - nHeight >= consensusParams.nMaxReorganizationDepth)
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "older-than-maxreorg-depth", strprintf("ContextualCheckBlockHeader(): forked chain older than max reorganization depth (height %d)", nHeight));
 
     return true;
