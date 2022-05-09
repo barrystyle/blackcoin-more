@@ -35,6 +35,7 @@
 #include <chainparams.h>
 #include <interfaces/handler.h>
 #include <interfaces/node.h>
+#include <miner.h> // DEFAULT_STAKE
 #include <node/ui_interface.h>
 #include <util/system.h>
 #include <util/translation.h>
@@ -1426,7 +1427,7 @@ void BitcoinGUI::updateWindowTitle()
 
 void BitcoinGUI::showNormalIfMinimized(bool fToggleHidden)
 {
-    if(!clientModel)
+    if (!clientModel)
         return;
 
     if (!isHidden() && !isMinimized() && !GUIUtil::isObscured(this) && fToggleHidden) {
@@ -1443,7 +1444,7 @@ void BitcoinGUI::toggleHidden()
 
 void BitcoinGUI::updateStakingIcon()
 {
-    if (m_node.shutdownRequested())
+    if (m_node.shutdownRequested() || !clientModel)
         return;
 
     WalletView * const walletView = walletFrame ? walletFrame->currentWalletView() : 0;
@@ -1494,7 +1495,7 @@ void BitcoinGUI::updateStakingIcon()
     {
         labelStakingIcon->setPixmap(platformStyle->SingleColorIcon(":/icons/staking_off").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
 
-        if (m_node.getNodeCount(CConnman::CONNECTIONS_ALL) == 0)
+        if (m_node.getNodeCount(ConnectionDirection::Both) == 0)
             labelStakingIcon->setToolTip(tr("Not staking because wallet is offline"));
         else if (m_node.isInitialBlockDownload())
             labelStakingIcon->setToolTip(tr("Not staking because wallet is syncing"));
