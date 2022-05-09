@@ -3470,7 +3470,7 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
     {
         static int nMaxStakeSearchInterval = 60;
         bool fKernelFound = false;
-        for (unsigned int n=0; n<min(nSearchInterval,(int64_t)nMaxStakeSearchInterval) && !fKernelFound && pindexPrev == chain().getCoinsTip(); n++)
+        for (unsigned int n=0; n<min(nSearchInterval,(int64_t)nMaxStakeSearchInterval) && !fKernelFound && pindexPrev == chain().getTip(); n++)
         {
             boost::this_thread::interruption_point();
             // Search backward in time from the given txNew timestamp
@@ -3492,7 +3492,7 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
                 LogPrint(BCLog::COINSTAKE, "CreateCoinStake : parsed kernel type=%d\n", whichType);
                 if (whichType != TxoutType::PUBKEY && whichType != TxoutType::PUBKEYHASH)
                 {
-                    LogPrint(BCLog::COINSTAKE, "CreateCoinStake : no support for kernel type=%d\n", whichType);
+                    LogPrint(BCLog::COINSTAKE, "CreateCoinStake : no support for kernel type=%d\n", (int)whichType);
                     break;  // only support pay to public key and pay to address
                 }
                 if (whichType == TxoutType::PUBKEYHASH) // pay to address type
@@ -3503,7 +3503,7 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
                     CPubKey pubKeyStake;
                     if (!HasPrivateKey(pkhash, fAllowWatchOnly) || !GetPubKey(pkhash, pubKeyStake))
                     {
-                        LogPrint(BCLog::COINSTAKE, "CreateCoinStake : failed to get key for kernel type=%d\n", whichType);
+                        LogPrint(BCLog::COINSTAKE, "CreateCoinStake : failed to get key for kernel type=%d\n", (int)whichType);
                         break;  // unable to find corresponding public key
                     }
 
@@ -3537,7 +3537,7 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
                 vwtxPrev.push_back(pcoin.first);
                 txNew.vout.push_back(CTxOut(0, scriptPubKeyOut));
 
-                LogPrint(BCLog::COINSTAKE, "CreateCoinStake : added kernel type=%d\n", whichType);
+                LogPrint(BCLog::COINSTAKE, "CreateCoinStake : added kernel type=%d\n", (int)whichType);
                 fKernelFound = true;
                 break;
             }
@@ -3639,8 +3639,8 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
     int nIn = 0;
     for (const CWalletTx* pcoin : vwtxPrev)
     {
-        auto spk_man = GetLegacyScriptPubKeyMan();
-        if (!SignSignature(spk_man, *pcoin->tx, txNew, nIn++, SIGHASH_ALL))
+        LegacyScriptPubKeyMan* spk_man = GetLegacyScriptPubKeyMan();
+        if (!SignSignature(*spk_man, *pcoin->tx, txNew, nIn++, SIGHASH_ALL))
             return error("CreateCoinStake : failed to sign coinstake");
     }
 

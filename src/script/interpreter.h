@@ -100,7 +100,8 @@ enum
 
     // Evaluating a pubkey that is not (0x04 + 64 bytes) or (0x02 or 0x03 + 32 bytes) by checksig causes script failure.
     // (softfork safe)
-    SCRIPT_VERIFY_DERKEY = (1U << 99),
+    SCRIPT_VERIFY_DERKEY = (1U << 31),
+
     // support CHECKSEQUENCEVERIFY opcode
     //
     // See BIP112 for details
