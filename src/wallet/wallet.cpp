@@ -3412,6 +3412,7 @@ bool CWallet::SelectCoinsForStaking(CAmount& nTargetValue, std::set<std::pair<co
 typedef std::vector<unsigned char> valtype;
 bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmount& nFees, CMutableTransaction& tx, CKey& key)
 {
+    bool fAllowWatchOnly = IsWalletFlagSet(WALLET_FLAG_DISABLE_PRIVATE_KEYS);
     CBlockIndex* pindexPrev = chain().getTip();
     arith_uint256 bnTargetPerCoinDay;
     bnTargetPerCoinDay.SetCompact(nBits);
@@ -3428,6 +3429,8 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
     // Choose coins to use
     const auto bal = GetBalance();
     CAmount nBalance = bal.m_mine_trusted;
+    if (fAllowWatchOnly)
+        nBalance += bal.m_watchonly_trusted;
 
     if (nBalance <= m_reserve_balance)
         return false;
@@ -3498,7 +3501,7 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
                     uint160 hash160(vSolutions[0]);
                     pkhash = PKHash(hash160);
                     CPubKey pubKeyStake;
-                    if (!GetPubKey(pkhash, pubKeyStake))
+                    if (!HasPrivateKey(pkhash, fAllowWatchOnly) || !GetPubKey(pkhash, pubKeyStake))
                     {
                         LogPrint(BCLog::COINSTAKE, "CreateCoinStake : failed to get key for kernel type=%d\n", whichType);
                         break;  // unable to find corresponding public key
@@ -3513,7 +3516,7 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
                     uint160 hash160(Hash160(vchPubKey));
                     pkhash = PKHash(hash160);
                     CPubKey pubKeyStake;
-                    if (!GetPubKey(pkhash, pubKeyStake))
+                    if (!HasPrivateKey(pkhash, fAllowWatchOnly) || !GetPubKey(pkhash, pubKeyStake))
                     {
                         LogPrint(BCLog::COINSTAKE, "CreateCoinStake : failed to get key for kernel type=%d\n", whichType);
                         break;  // unable to find corresponding public key
@@ -3636,7 +3639,8 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
     int nIn = 0;
     for (const CWalletTx* pcoin : vwtxPrev)
     {
-        if (!SignSignature(*pwallet->GetLegacyScriptPubKeyMan(), *pcoin->tx, txNew, nIn++, SIGHASH_ALL))
+        auto spk_man = GetLegacyScriptPubKeyMan();
+        if (!SignSignature(spk_man, *pcoin->tx, txNew, nIn++, SIGHASH_ALL))
             return error("CreateCoinStake : failed to sign coinstake");
     }
 
@@ -3648,6 +3652,17 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
     // Successfully generated coinstake
     tx = txNew;
     return true;
+}
+
+bool CWallet::HasPrivateKey(const CTxDestination& dest, const bool& fAllowWatchOnly)
+{
+    CScript script = GetScriptForDestination(dest);
+    isminetype mine = IsMine(script);
+    if(!mine) return false;
+    std::unique_ptr<SigningProvider> provider = GetSolvingProvider(script);
+    bool solvable = provider ? IsSolvable(*provider, script) : false;
+    bool spendable = ((mine & ISMINE_SPENDABLE) != ISMINE_NO) || (((mine & ISMINE_WATCH_ONLY) != ISMINE_NO) && (fAllowWatchOnly && solvable));
+    return spendable;
 }
 
 bool CWallet::GetPubKey(const PKHash& pkhash, CPubKey& pubkey) const

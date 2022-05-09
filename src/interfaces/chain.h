@@ -27,6 +27,8 @@ enum class MemPoolRemovalReason;
 struct bilingual_str;
 struct CBlockLocator;
 struct NodeContext;
+class CBlockIndex;
+class CCoinsViewCache;
 
 namespace interfaces {
 
