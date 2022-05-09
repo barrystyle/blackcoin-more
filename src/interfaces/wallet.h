@@ -235,6 +235,9 @@ public:
     // Remove wallet.
     virtual void remove() = 0;
 
+    //! Get donation percentage
+    virtual unsigned int getDonationPercentage() = 0;
+
     //! Get last coin stake search interval
     virtual int64_t getLastCoinStakeSearchInterval() = 0;
 
@@ -337,15 +340,13 @@ struct WalletBalances
     CAmount unconfirmed_watch_only_balance = 0;
     CAmount immature_watch_only_balance = 0;
     CAmount watch_only_stake = 0;
-    unsigned int donation_percentage = 0; 
 
     bool balanceChanged(const WalletBalances& prev) const
     {
         return balance != prev.balance || unconfirmed_balance != prev.unconfirmed_balance ||
                immature_balance != prev.immature_balance || watch_only_balance != prev.watch_only_balance ||
                unconfirmed_watch_only_balance != prev.unconfirmed_watch_only_balance ||
-               immature_watch_only_balance != prev.immature_watch_only_balance || watch_only_stake != prev.watch_only_stake ||
-               donation_percentage != prev.donation_percentage;
+               immature_watch_only_balance != prev.immature_watch_only_balance || watch_only_stake != prev.watch_only_stake;
     }
 };
 

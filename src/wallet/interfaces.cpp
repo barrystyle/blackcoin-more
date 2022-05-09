@@ -424,8 +424,9 @@ public:
     {
         RemoveWallet(m_wallet, false /* load_on_start */);
     }
+    unsigned int getDonationPercentage() override { return m_wallet->m_donation_percentage; }
     int64_t getLastCoinStakeSearchInterval() override { return m_wallet->m_last_coin_stake_search_interval; }
-	bool getWalletUnlockStakingOnly() override { return m_wallet->m_wallet_unlock_staking_only; }
+    bool getWalletUnlockStakingOnly() override { return m_wallet->m_wallet_unlock_staking_only; }
     void setWalletUnlockStakingOnly(bool unlock) override { m_wallet->m_wallet_unlock_staking_only = unlock; }
     bool isLegacy() override { return m_wallet->IsLegacy(); }
     std::unique_ptr<Handler> handleUnload(UnloadFn fn) override

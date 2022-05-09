@@ -198,6 +198,7 @@ OverviewPage::~OverviewPage()
 void OverviewPage::setBalance(const interfaces::WalletBalances& balances)
 {
     int unit = walletModel->getOptionsModel()->getDisplayUnit();
+    unsigned int donation_percentage = walletModel->wallet().getDonationPercentage();
     m_balances = balances;
     if (walletModel->wallet().isLegacy()) {
         if (walletModel->wallet().privateKeysDisabled()) {
@@ -224,14 +225,14 @@ void OverviewPage::setBalance(const interfaces::WalletBalances& balances)
         ui->labelImmature->setText(BitcoinUnits::formatWithPrivacy(unit, balances.immature_balance, BitcoinUnits::SeparatorStyle::ALWAYS, m_privacy));
         ui->labelTotal->setText(BitcoinUnits::formatWithPrivacy(unit, balances.balance + balances.unconfirmed_balance + balances.immature_balance, BitcoinUnits::SeparatorStyle::ALWAYS, m_privacy));
     }
-    ui->labelDonations->setText((QString::number(balances.donation_percentage) + "% of stake rewards"));
+    ui->labelDonations->setText((QString::number(donation_percentage) + "% of stake rewards"));
     // only show immature (newly mined) balance if it's non-zero, so as not to complicate things
     // for the non-mining users
     bool showImmature = balances.immature_balance != 0;
 	bool showStake = balances.stake != 0;
     bool showWatchOnlyImmature = balances.immature_watch_only_balance != 0;
 	bool showWatchOnlyStake = balances.watch_only_stake != 0;
-    bool showDonations = balances.donation_percentage != 0;
+    bool showDonations = donation_percentage != 0;
 
     // for symmetry reasons also show immature label when the watch-only one is shown
     ui->labelImmature->setVisible(showImmature || showWatchOnlyImmature);
