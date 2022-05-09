@@ -2895,7 +2895,7 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
         }
 
         // Check transaction timestamp
-        if (block.GetBlockTime() < (int64_t)tx->nTime)
+        if (block.GetBlockTime() < (tx->nTime ? (int64_t)tx->nTime : block.GetBlockTime()))
             return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-tx-time", strprintf("%s : block timestamp earlier than transaction timestamp", __func__));
 
     }
@@ -2986,8 +2986,10 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, BlockValidatio
     const Consensus::Params& consensusParams = params.GetConsensus();
 
     // Check maximum reorg depth
-    if (chain.Height() - nHeight >= consensusParams.nMaxReorganizationDepth)
-        return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "older-than-maxreorg-depth", strprintf("ContextualCheckBlockHeader(): forked chain older than max reorganization depth (height %d)", nHeight));
+    if (chain.Height() - nHeight >= consensusParams.nMaxReorganizationDepth) {
+        LogPrintf("ERROR: %s: forked chain older than max reorganization depth (height %d)\n", __func__, nHeight);
+        return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "older-than-maxreorg-depth");
+    }
 
     // Preliminary check difficulty in pos-only stage
     if (nHeight > consensusParams.nLastPOWBlock && block.nBits != GetNextTargetRequired(pindexPrev, consensusParams, true))
@@ -3221,7 +3223,7 @@ bool ChainstateManager::ProcessNewBlockHeaders(const std::vector<CBlockHeader>& 
             }
             if (ppindex) {
                 *ppindex = pindex;
-                if(bFirst && pindexFirst)
+                if (bFirst && pindexFirst)
                 {
                     *pindexFirst = pindex;
                     bFirst = false;
