@@ -3645,7 +3645,8 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
     }
 
     // Limit size
-    unsigned int sz = GetTransactionWeight(txNew);
+    CTransactionRef txDummy = MakeTransactionRef(std::move(txNew));
+    unsigned int sz = GetTransactionWeight(*txDummy);
     if (sz > MAX_STANDARD_TX_WEIGHT)
         return error("CreateCoinStake : exceeded coinstake size limit");
 

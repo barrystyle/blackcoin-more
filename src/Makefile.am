@@ -694,7 +694,7 @@ blackmore_cli_LDADD = \
   $(LIBBITCOIN_CRYPTO) \
   $(LIBLEVELDB) \
   $(LIBLEVELDB_SSE42) \
-  $(LIBMEMENV) \\
+  $(LIBMEMENV) \
   $(LIBSECP256K1)
 
 blackmore_cli_LDADD += $(BOOST_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(EVENT_LIBS)

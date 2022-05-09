@@ -344,7 +344,7 @@ void InitScriptExecutionCache();
 /** Functions for validating blocks and updating the block tree */
 
 /** Context-independent validity checks */
-bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW = true, bool fCheckMerkleRoot = true, bool fCheckSig = true);
+bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensus::Params& consensusParams, CChainState& chainstate, bool fCheckPOW = true, bool fCheckMerkleRoot = true, bool fCheckSig = true);
 bool IsCanonicalBlockSignature(const std::shared_ptr<const CBlock> pblock, bool checkLowS);
 
 /** Check a block is completely valid from start to finish (only works on top of our current best block) */
@@ -491,7 +491,8 @@ public:
         const CBlockHeader& block,
         BlockValidationState& state,
         const CChainParams& chainparams,
-        CBlockIndex** ppindex) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+        CBlockIndex** ppindex,
+        CChainState& chainstate) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
     CBlockIndex* LookupBlockIndex(const uint256& hash) const EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 

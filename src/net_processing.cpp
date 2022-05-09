@@ -63,9 +63,16 @@ static constexpr int64_t EXTRA_PEER_CHECK_INTERVAL = 45;
 static constexpr int64_t MINIMUM_CONNECT_TIME = 30;
 /** SHA256("main address relay")[0:8] */
 static constexpr uint64_t RANDOMIZER_ID_ADDRESS_RELAY = 0x3cac0035b5866b90ULL;
+/*
 /// Age after which a stale block will no longer be served if requested as
 /// protection against fingerprinting. Set to one month, denominated in seconds.
 static constexpr int STALE_RELAY_AGE_LIMIT = 30 * 24 * 60 * 60;
+*/
+/// Age after which a stale block will no longer be served if requested as
+/// protection against fingerprinting.
+/// For Blackcoin, set to 10 hours, denominated in seconds.
+/// (should be close to nMaxReorganizationDepth * nTargetSpacing)
+static constexpr int STALE_RELAY_AGE_LIMIT = 10 * 60 * 60;
 /// Age after which a block is considered historical for purposes of rate
 /// limiting block relay. Set to one week, denominated in seconds.
 static constexpr int HISTORICAL_BLOCK_AGE = 7 * 24 * 60 * 60;
@@ -4122,6 +4129,9 @@ bool PeerManagerImpl::MaybeDiscourageAndDisconnect(CNode& pnode, Peer& peer)
     LogPrint(BCLog::NET, "Disconnecting and discouraging peer %d!\n", peer.m_id);
     if (m_banman) m_banman->Discourage(pnode.addr);
     m_connman.DisconnectNode(pnode.addr);
+    LOCK(cs_main);
+    // Remove all data from the header spam filter when the address is banned
+    CleanAddressHeaders(pnode.addr);
     return true;
 }
 
@@ -5027,4 +5037,9 @@ bool PeerManagerImpl::SendMessages(CNode* pto)
         MaybeSendFeefilter(*pto, current_time);
     } // release cs_main
     return true;
+}
+
+unsigned int GetDefaultHeaderSpamFilterMaxSize()
+{
+    return Params().GetConsensus().nCoinbaseMaturity();
 }
