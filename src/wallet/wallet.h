@@ -551,7 +551,6 @@ public:
         CAmount m_watchonly_untrusted_pending{0};
         CAmount m_watchonly_immature{0};
         CAmount m_watchonly_stake{0};
-        unsigned int m_donation_percentage{0};
     };
     Balance GetBalance(int min_depth = 0, bool avoid_reuse = true) const;
     CAmount GetAvailableBalance(const CCoinControl* coinControl = nullptr) const;
@@ -642,6 +641,7 @@ public:
     // provides no real security
     std::atomic<bool> m_wallet_unlock_staking_only{false};
     CAmount m_reserve_balance{DEFAULT_RESERVE_BALANCE};
+    unsigned int m_donation_percentage{DEFAULT_DONATION_PERCENTAGE};
     int64_t m_last_coin_stake_search_time{0};
     int64_t m_last_coin_stake_search_interval{0};
     std::atomic<bool> m_enabled_staking{false};
@@ -668,6 +668,7 @@ public:
     isminetype IsMine(const CTxDestination& dest) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
     isminetype IsMine(const CScript& script) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
     isminetype IsMine(const CTxIn& txin) const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
+    bool GetPubKey(const PKHash& pkhash, CPubKey& pubkey) const;
     /**
      * Returns amount of debit if the input matches the
      * filter, otherwise returns 0

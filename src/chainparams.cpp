@@ -10,6 +10,7 @@
 #include <consensus/merkle.h>
 #include <deploymentinfo.h>
 #include <hash.h> // for signet block challenge hash
+#include <key_io.h>
 #include <script/standard.h>
 #include <util/system.h>
 

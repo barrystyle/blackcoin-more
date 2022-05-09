@@ -672,6 +672,17 @@ public:
         const CBlockIndex* tip = Assert(m_node.chainman)->ActiveChain().Tip();
         return DeploymentActiveAfter(tip, Params().GetConsensus(), Consensus::DEPLOYMENT_TAPROOT);
     }
+    CBlockIndex* getTip() const override
+    {
+        LOCK(::cs_main);
+        CBlockIndex* tip = Assert(m_node.chainman)->ActiveChain().Tip();
+        return tip;
+    }
+    CCoinsViewCache& getCoinsTip() override
+    {
+        LOCK(::cs_main);
+        return chainman().ActiveChainstate().CoinsTip();
+    }
     NodeContext& m_node;
 };
 } // namespace

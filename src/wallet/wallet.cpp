@@ -44,6 +44,9 @@
 
 using interfaces::FoundBlock;
 
+static int64_t GetStakeCombineThreshold() { return 500 * COIN; }
+static int64_t GetStakeSplitThreshold() { return 2 * GetStakeCombineThreshold(); }
+
 const std::map<uint64_t,std::string> WALLET_FLAG_CAVEATS{
     {WALLET_FLAG_AVOID_REUSE,
         "You need to rescan the blockchain in order to correctly mark used "
@@ -1801,7 +1804,7 @@ bool CWallet::SignTransaction(CMutableTransaction& tx) const
             return false;
         }
         const CWalletTx& wtx = mi->second;
-        coins[input.prevout] = Coin(wtx.tx->vout[input.prevout.n], wtx.m_confirm.block_height, wtx.IsCoinBase(), wtx.IsCoinStake());
+        coins[input.prevout] = Coin(wtx.tx->vout[input.prevout.n], wtx.m_confirm.block_height, wtx.IsCoinBase(), wtx.IsCoinStake(), wtx.nTimeSmart);
     }
     std::map<int, std::string> input_errors;
     return SignTransaction(tx, coins, SIGHASH_DEFAULT, input_errors);
@@ -2667,6 +2670,13 @@ std::shared_ptr<CWallet> CWallet::Create(interfaces::Chain* chain, const std::st
     if (!ParseMoney(gArgs.GetArg("-reservebalance", FormatMoney(DEFAULT_RESERVE_BALANCE)), walletInstance->m_reserve_balance))
         walletInstance->m_reserve_balance = DEFAULT_RESERVE_BALANCE;
 
+    unsigned int nDonationPercentage = gArgs.GetArg("-donatetodevfund", DEFAULT_DONATION_PERCENTAGE);
+    if (nDonationPercentage < 0)
+        nDonationPercentage = 0;
+    else if (nDonationPercentage > 95)
+        nDonationPercentage = 95;
+    walletInstance->m_donation_percentage = nDonationPercentage;
+
     walletInstance->WalletLogPrintf("Wallet completed loading in %15dms\n", GetTimeMillis() - nStart);
 
     // Try to top up keypool. No-op if the wallet is locked.
@@ -2693,7 +2703,8 @@ std::shared_ptr<CWallet> CWallet::Create(interfaces::Chain* chain, const std::st
         walletInstance->WalletLogPrintf("m_address_book.size() = %u\n",  walletInstance->m_address_book.size());
     }
 
-    if (!fReindex)
+    //Blackcoin ToDo: fix!
+    //if (!fReindex)
         // Clean not reverted coinstake transactions
         walletInstance->CleanCoinStake();
 
@@ -2880,10 +2891,15 @@ int CWalletTx::GetBlocksToMaturity() const
     return std::max(0, (Params().GetConsensus().nCoinbaseMaturity+1) - chain_depth);
 }
 
-bool CWalletTx::IsImmatureCoinBase() const
+bool CWalletTx::IsImmature() const
 {
     // note GetBlocksToMaturity is 0 for non-coinbase tx
     return GetBlocksToMaturity() > 0;
+}
+
+bool CWalletTx::IsImmatureCoinBase() const
+{
+    return IsCoinBase() && IsImmature();
 }
 
 bool CWalletTx::IsImmatureCoinStake() const
@@ -3555,7 +3571,7 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
     }
 
     // Blackcoin: Donate to dev fund (or not)
-    if (nDonationPercentage > 0) {
+    if (m_donation_percentage > 0) {
 
         CAmount nDevCredit = 0;
         CAmount nMinerCredit = 0;
@@ -3566,13 +3582,13 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
             if (nReward < 0)
                 return false;
 
-            nDevCredit = (GetProofOfStakeSubsidy() * nDonationPercentage) / 100;
+            nDevCredit = (GetProofOfStakeSubsidy() * m_donation_percentage) / 100;
             nMinerCredit = nReward - nDevCredit;
             nCredit += nMinerCredit;
         }
 
         // Split stake
-        if (nCredit >= GetStakeSplitThreshold() /* && nDonationPercentage != 100 */)
+        if (nCredit >= GetStakeSplitThreshold() /* && m_donation_percentage != 100 */)
             txNew.vout.push_back(CTxOut(0, txNew.vout[1].scriptPubKey));
 
         txNew.vout.push_back(CTxOut(0, Params().GetDevRewardScript()));
@@ -3620,13 +3636,13 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
     int nIn = 0;
     for (const CWalletTx* pcoin : vwtxPrev)
     {
-        if (!SignSignature(keystore, *pcoin->tx, txNew, nIn++, SIGHASH_ALL))
+        if (!SignSignature(*pwallet->GetLegacyScriptPubKeyMan(), *pcoin->tx, txNew, nIn++, SIGHASH_ALL))
             return error("CreateCoinStake : failed to sign coinstake");
     }
 
     // Limit size
-    unsigned int nBytes = ::GetSerializeSize(txNew, SER_NETWORK, PROTOCOL_VERSION);
-    if (nBytes > MAX_STANDARD_TX_SIZE)
+    unsigned int nBytes = ::GetSerializeSize(txNew, PROTOCOL_VERSION);
+    if (nBytes > (MAX_STANDARD_TX_WEIGHT / WITNESS_SCALE_FACTOR))
         return error("CreateCoinStake : exceeded coinstake size limit");
 
     // Successfully generated coinstake
@@ -3634,3 +3650,14 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
     return true;
 }
 
+bool CWallet::GetPubKey(const PKHash& pkhash, CPubKey& pubkey) const
+{
+    CScript script = GetScriptForDestination(pkhash);
+    std::unique_ptr<SigningProvider> provider = GetSolvingProvider(script);
+    if(provider)
+    {
+        return provider->GetPubKey(ToKeyID(pkhash), pubkey);
+    }
+
+    return false;
+}

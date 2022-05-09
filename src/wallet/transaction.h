@@ -349,6 +349,7 @@ public:
     const uint256& GetHash() const { return tx->GetHash(); }
     bool IsCoinBase() const { return tx->IsCoinBase(); }
     bool IsCoinStake() const { return tx->IsCoinStake(); }
+    bool IsImmature() const;
     bool IsImmatureCoinBase() const;
     bool IsImmatureCoinStake() const;
 

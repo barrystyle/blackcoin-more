@@ -551,9 +551,11 @@ bool VerifySignature(const Coin& coin, const uint256 txFromHash, const CTransact
     TransactionSignatureChecker checker(&txTo, nIn, 0, MissingDataBehavior::FAIL);
 	
     const CTxIn& txin = txTo.vin[nIn];
+    /*
     if (txin.prevout.n >= txFrom.vout.size())
         return false;
     const CTxOut& txout = txFrom.vout[txin.prevout.n];
+    */
 
     const CTxOut& txout = coin.out;
 

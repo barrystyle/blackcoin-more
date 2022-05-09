@@ -263,6 +263,12 @@ public:
 
     //! Check if Taproot has activated
     virtual bool isTaprootActive() const = 0;
+
+    //! Get chain tip
+    virtual CBlockIndex* getTip() const =  0;
+
+    //! Get coins tip.
+    virtual CCoinsViewCache& getCoinsTip() = 0;
 };
 
 //! Interface to let node manage chain clients (wallets, or maybe tools for
