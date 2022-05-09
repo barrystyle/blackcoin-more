@@ -347,7 +347,6 @@ public:
             result.immature_watch_only_balance = bal.m_watchonly_immature;
             result.watch_only_stake = bal.m_watchonly_stake;
         }
-        result.donation_percentage = bal.m_donation_percentage;
         return result;
     }
     bool tryGetBalances(WalletBalances& balances, uint256& block_hash) override

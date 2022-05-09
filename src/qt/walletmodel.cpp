@@ -63,11 +63,6 @@ WalletModel::~WalletModel()
     unsubscribeFromCoreSignals();
 }
 
-unsigned int WalletModel::getDonationPercentage() const
-{
-    return wallet->GetDonationPercentage();
-}
-
 void WalletModel::startPollBalance()
 {
     // This timer will be fired repeatedly to update the balance
