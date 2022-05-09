@@ -3489,7 +3489,7 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
                     LogPrint(BCLog::COINSTAKE, "CreateCoinStake : failed to parse kernel\n");
                     break;
                 }
-                LogPrint(BCLog::COINSTAKE, "CreateCoinStake : parsed kernel type=%d\n", whichType);
+                LogPrint(BCLog::COINSTAKE, "CreateCoinStake : parsed kernel type=%d\n", (int)whichType);
                 if (whichType != TxoutType::PUBKEY && whichType != TxoutType::PUBKEYHASH)
                 {
                     LogPrint(BCLog::COINSTAKE, "CreateCoinStake : no support for kernel type=%d\n", (int)whichType);
@@ -3518,13 +3518,13 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
                     CPubKey pubKeyStake;
                     if (!HasPrivateKey(pkhash, fAllowWatchOnly) || !GetPubKey(pkhash, pubKeyStake))
                     {
-                        LogPrint(BCLog::COINSTAKE, "CreateCoinStake : failed to get key for kernel type=%d\n", whichType);
+                        LogPrint(BCLog::COINSTAKE, "CreateCoinStake : failed to get key for kernel type=%d\n", (int)whichType);
                         break;  // unable to find corresponding public key
                     }
 
                     if (key.GetPubKey() != pubKey)
                     {
-                        LogPrint(BCLog::COINSTAKE, "CreateCoinStake : invalid key for kernel type=%d\n", whichType);
+                        LogPrint(BCLog::COINSTAKE, "CreateCoinStake : invalid key for kernel type=%d\n", (int)whichType);
                         break; // keys mismatch
                     }
 
@@ -3645,8 +3645,8 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
     }
 
     // Limit size
-    unsigned int nBytes = ::GetSerializeSize(txNew, PROTOCOL_VERSION);
-    if (nBytes > (MAX_STANDARD_TX_WEIGHT / WITNESS_SCALE_FACTOR))
+    unsigned int sz = GetTransactionWeight(txNew);
+    if (sz > MAX_STANDARD_TX_WEIGHT)
         return error("CreateCoinStake : exceeded coinstake size limit");
 
     // Successfully generated coinstake
@@ -3658,7 +3658,7 @@ bool CWallet::HasPrivateKey(const CTxDestination& dest, const bool& fAllowWatchO
 {
     CScript script = GetScriptForDestination(dest);
     isminetype mine = IsMine(script);
-    if(!mine) return false;
+    if (!mine) return false;
     std::unique_ptr<SigningProvider> provider = GetSolvingProvider(script);
     bool solvable = provider ? IsSolvable(*provider, script) : false;
     bool spendable = ((mine & ISMINE_SPENDABLE) != ISMINE_NO) || (((mine & ISMINE_WATCH_ONLY) != ISMINE_NO) && (fAllowWatchOnly && solvable));
@@ -3669,8 +3669,7 @@ bool CWallet::GetPubKey(const PKHash& pkhash, CPubKey& pubkey) const
 {
     CScript script = GetScriptForDestination(pkhash);
     std::unique_ptr<SigningProvider> provider = GetSolvingProvider(script);
-    if(provider)
-    {
+    if (provider) {
         return provider->GetPubKey(ToKeyID(pkhash), pubkey);
     }
 
