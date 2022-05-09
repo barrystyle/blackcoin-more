@@ -176,6 +176,15 @@ bool CheckInputScripts(const CTransaction& tx, TxValidationState& state,
                        std::vector<CScriptCheck>* pvChecks = nullptr)
                        EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
+int64_t FutureDrift(CChainState& active_chainstate, int64_t nTime)
+{
+    // loose policy for FutureDrift in regtest mode
+    if (Params().GetConsensus().fPowNoRetargeting && active_chainstate.m_chain.Height() <= Params().GetConsensus().nLastPOWBlock) {
+        return nTime + 24 * 60 * 60;
+    }
+    return Params().GetConsensus().IsProtocolV2(nTime) ? nTime + 15 : nTime + 10 * 60;
+}
+
 bool CheckFinalTx(const CBlockIndex* active_chain_tip, const CTransaction &tx, int flags)
 {
     AssertLockHeld(cs_main);
@@ -978,15 +987,6 @@ CAmount GetProofOfStakeSubsidy()
     return COIN * 3 / 2;
 }
 
-int64_t FutureDrift(CChainState& active_chainstate, int64_t nTime)
-{
-    // loose policy for FutureDrift in regtest mode
-    if (Params().GetConsensus().fPowNoRetargeting && active_chainstate.m_chain.Height() <= Params().GetConsensus().nLastPOWBlock) {
-        return nTime + 24 * 60 * 60;
-    }
-    return Params().GetConsensus().IsProtocolV2(nTime) ? nTime + 15 : nTime + 10 * 60;
-}
-
 CoinsViews::CoinsViews(
     std::string ldb_name,
     size_t cache_size_bytes,
@@ -1502,7 +1502,7 @@ bool CChainState::ConnectBlock(const CBlock& block, BlockValidationState& state,
     // is enforced in ContextualCheckBlockHeader(); we wouldn't want to
     // re-enforce that rule here (at least until we make it impossible for
     // GetAdjustedTime() to go backward).
-    if (!CheckBlock(block, state, m_params.GetConsensus(), !fJustCheck, !fJustCheck)) {
+    if (!CheckBlock(block, state, m_params.GetConsensus(), *this, !fJustCheck, !fJustCheck)) {
         if (state.GetResult() == BlockValidationResult::BLOCK_MUTATED) {
             // We don't write down blocks to disk if they may have been
             // corrupted, so this should be impossible unless we're having hardware
