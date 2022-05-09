@@ -600,6 +600,23 @@ void CWallet::AddToSpends(const COutPoint& outpoint, const uint256& wtxid)
     SyncMetaData(range);
 }
 
+void CWallet::RemoveFromSpends(const COutPoint& outpoint, const uint256& wtxid)
+{
+    std::pair<TxSpends::iterator, TxSpends::iterator> range;
+    range = mapTxSpends.equal_range(outpoint);
+    TxSpends::iterator it = range.first;
+    for (; it != range.second; ++ it)
+    {
+        if (it->second == wtxid)
+        {
+            mapTxSpends.erase(it);
+            break;
+        }
+    }
+    range = mapTxSpends.equal_range(outpoint);
+    if (range.first != range.second)
+        SyncMetaData(range);
+}
 
 void CWallet::AddToSpends(const uint256& wtxid)
 {
@@ -611,6 +628,17 @@ void CWallet::AddToSpends(const uint256& wtxid)
 
     for (const CTxIn& txin : thisTx.tx->vin)
         AddToSpends(txin.prevout, wtxid);
+}
+
+void CWallet::RemoveFromSpends(const uint256& wtxid)
+{
+    assert (mapWallet.count(wtxid));
+    CWalletTx& thisTx = mapWallet.at(wtxid);
+	if (thisTx.IsCoinBase()) // Coinbases don't spend anything!
+        return;
+
+    for (const CTxIn& txin : thisTx.tx->vin)
+        RemoveFromSpends(txin.prevout, wtxid);
 }
 
 bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
@@ -2182,6 +2210,32 @@ std::set<CTxDestination> CWallet::GetLabelAddresses(const std::string& label) co
             result.insert(address);
     }
     return result;
+}
+
+// disable transaction (only for coinstake)
+void CWallet::DisableTransaction(const CTransaction &tx)
+{
+    if (!tx.IsCoinStake() || !IsFromMe(tx))
+        return; // only disconnecting coinstake requires marking input unspent
+
+    uint256 hash = tx.GetHash();
+    if (AbandonTransaction(hash))
+    {
+        LOCK(cs_wallet);
+        RemoveFromSpends(hash);
+        for (const CTxIn& txin : tx.vin)
+        {
+            auto it = mapWallet.find(txin.prevout.hash);
+            if (it != mapWallet.end()) {
+                CWalletTx &coin = it->second;
+                coin.MarkDirty();
+                NotifyTransactionChanged(coin.GetHash(), CT_UPDATED);
+            }
+        }
+        CWalletTx& wtx = mapWallet.at(hash);
+        wtx.MarkDirty();
+        NotifyTransactionChanged(hash, CT_DELETED);
+    }
 }
 
 bool ReserveDestination::GetReservedDestination(CTxDestination& dest, bool internal, std::string& error)
