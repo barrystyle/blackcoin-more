@@ -426,7 +426,6 @@ static RPCHelpMan createrawtransaction()
         UniValue::VARR,
         UniValueType(), // ARR or OBJ, checked later
         UniValue::VNUM,
-        UniValue::VBOOL
         }, true
     );
 
@@ -1486,7 +1485,6 @@ static RPCHelpMan createpsbt()
         UniValue::VARR,
         UniValueType(), // ARR or OBJ, checked later
         UniValue::VNUM,
-        UniValue::VBOOL,
         }, true
     );
 

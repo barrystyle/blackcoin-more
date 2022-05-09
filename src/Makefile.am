@@ -756,7 +756,7 @@ blackmore_util_LDADD = \
   $(LIBBITCOIN_CRYPTO) \
   $(LIBSECP256K1)
 
-blackmore_util_LDADD += $(BOOST_LIBS)
+blackmore_util_LDADD += $(BOOST_LIBS) $(CRYPTO_LIBS)
 #
 
 # bitcoinconsensus library #

@@ -4640,8 +4640,7 @@ static RPCHelpMan walletcreatefundedpsbt()
         UniValue::VARR,
         UniValueType(), // ARR or OBJ, checked later
         UniValue::VNUM,
-        UniValue::VOBJ,
-        UniValue::VBOOL
+        UniValue::VOBJ
         }, true
     );
 
