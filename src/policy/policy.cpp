@@ -31,12 +31,19 @@ CAmount GetDustThreshold(const CTxOut& txout, const CFeeRate& dustRelayFeeIn)
     if (txout.scriptPubKey.IsUnspendable())
         return 0;
 
-    size_t nSize = GetSerializeSize(txout, SER_DISK, 0);
+    size_t nSize = GetSerializeSize(txout);
+    int witnessversion = 0;
+    std::vector<unsigned char> witnessprogram;
 
-    // the 148 mentioned above
-    nSize += (32 + 4 + 1 + 107 + 4); 
+    if (txout.scriptPubKey.IsWitnessProgram(witnessversion, witnessprogram)) {
+        // sum the sizes of the parts of a transaction input
+        // with 75% segwit discount applied to the script size.
+        nSize += (32 + 4 + 1 + (107 / WITNESS_SCALE_FACTOR) + 4);
+    } else {
+        nSize += (32 + 4 + 1 + 107 + 4); // the 148 mentioned above
+    }
 
-    return 3 * dustRelayFeeIn.GetFee(nSize);
+    return dustRelayFeeIn.GetFee(nSize);
 }
 
 bool IsDust(const CTxOut& txout, const CFeeRate& dustRelayFeeIn)
@@ -69,7 +76,7 @@ bool IsStandard(const CScript& scriptPubKey, TxoutType& whichType)
 
 bool IsStandardTx(const CTransaction& tx, bool permit_bare_multisig, const CFeeRate& dust_relay_fee, std::string& reason)
 {
-    if ((!Params().GetConsensus().IsProtocolV3_1(tx.nTime) && (tx.nVersion > CTransaction::MAX_STANDARD_VERSION-1)) || tx.nVersion > CTransaction::MAX_STANDARD_VERSION || tx.nVersion < 1) {
+    if ((!Params().GetConsensus().IsProtocolV3_1(tx.nTime) && (tx.nVersion > TX_MAX_STANDARD_VERSION-1)) || tx.nVersion > TX_MAX_STANDARD_VERSION || tx.nVersion < 1) {
         reason = "version";
         return false;
     }
@@ -77,9 +84,9 @@ bool IsStandardTx(const CTransaction& tx, bool permit_bare_multisig, const CFeeR
     // Extremely large transactions with lots of inputs can cost the network
     // almost as much to process as they cost the sender in fees, because
     // computing signature hashes is O(ninputs*txsize). Limiting transactions
-    // to MAX_STANDARD_TX_SIZE mitigates CPU exhaustion attacks.
-    unsigned int sz = tx.GetTotalSize();
-    if (sz >= MAX_STANDARD_TX_SIZE) {
+    // to MAX_STANDARD_TX_WEIGHT mitigates CPU exhaustion attacks.
+    unsigned int sz = GetTransactionWeight(tx);
+    if (sz > MAX_STANDARD_TX_WEIGHT) {
         reason = "tx-size";
         return false;
     }

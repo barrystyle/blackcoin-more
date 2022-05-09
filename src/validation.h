@@ -144,7 +144,7 @@ extern CBlockIndex *pindexBestHeader;
 extern const std::vector<std::string> CHECKLEVEL_DOC;
 
 // Blackcoin: Future drift
-int64_t FutureDrift(int64_t nTime);
+int64_t FutureDrift(CChainState& active_chainstate, int64_t nTime);
 
 /** Unload database information */
 void UnloadBlockIndex(CTxMemPool* mempool, ChainstateManager& chainman);

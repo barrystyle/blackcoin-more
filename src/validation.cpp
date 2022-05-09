@@ -73,8 +73,6 @@ static const unsigned int MAX_DISCONNECTED_TX_POOL_SIZE = 20000;
 static constexpr std::chrono::hours DATABASE_WRITE_INTERVAL{1};
 /** Time to wait between flushing chainstate to disk. */
 static constexpr std::chrono::hours DATABASE_FLUSH_INTERVAL{24};
-/** Maximum age of our tip for us to be considered current for fee estimation */
-static constexpr std::chrono::hours MAX_FEE_ESTIMATION_TIP_AGE{3};
 const std::vector<std::string> CHECKLEVEL_DOC {
     "level 0 reads the blocks from disk",
     "level 1 verifies block validity",
@@ -573,7 +571,7 @@ bool MemPoolAccept::PreChecks(ATMPArgs& args, Workspace& ws)
         return state.Invalid(TxValidationResult::TX_PREMATURE_SPEND, "non-final");
 
     // For the same reasons as in the case with non-final transactions
-    if ((tx.nTime ? tx.nTime : GetAdjustedTime()) > FutureDrift(GetAdjustedTime())) {
+    if ((tx.nTime ? tx.nTime : GetAdjustedTime()) > FutureDrift(m_active_chainstate, GetAdjustedTime())) {
         return state.Invalid(TxValidationResult::TX_PREMATURE_SPEND, "time-too-new");
     }
 
@@ -980,13 +978,12 @@ CAmount GetProofOfStakeSubsidy()
     return COIN * 3 / 2;
 }
 
-int64_t FutureDrift(int64_t nTime)
+int64_t FutureDrift(CChainState& active_chainstate, int64_t nTime)
 {
     // loose policy for FutureDrift in regtest mode
-    //Blackcoin ToDO: ENABLE!
-    //if (Params().GetConsensus().fPowNoRetargeting && m_active_chainstate.m_chain.Height() <= Params().GetConsensus().nLastPOWBlock) {
-    //    return nTime + 24 * 60 * 60;
-    //}
+    if (Params().GetConsensus().fPowNoRetargeting && active_chainstate.m_chain.Height() <= Params().GetConsensus().nLastPOWBlock) {
+        return nTime + 24 * 60 * 60;
+    }
     return Params().GetConsensus().IsProtocolV2(nTime) ? nTime + 15 : nTime + 10 * 60;
 }
 
@@ -2857,9 +2854,10 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
         if (block.vtx[i]->IsCoinBase())
             return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cb-multiple", "more than one coinbase");
 
+    //Blackcoin ToDO: ENABLE!
     // Check coinbase timestamp
-    if (block.GetBlockTime() > FutureDrift(block.vtx[0]->nTime ? (int64_t)block.vtx[0]->nTime : block.GetBlockTime()))
-        return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cb-time", "coinbase timestamp is too early");
+    //if (block.GetBlockTime() > FutureDrift(m_active_chainstate, block.vtx[0]->nTime ? (int64_t)block.vtx[0]->nTime : block.GetBlockTime()))
+        //return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cb-time", "coinbase timestamp is too early");
 
     // Check coinstake timestamp
     if (block.IsProofOfStake() && !CheckCoinStakeTimestamp(block.GetBlockTime(), block.vtx[1]->nTime ? (int64_t)block.vtx[1]->nTime : block.GetBlockTime()))
@@ -3015,12 +3013,12 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, BlockValidatio
     if (block.GetBlockTime() > nAdjustedTime + MAX_FUTURE_BLOCK_TIME)
         return state.Invalid(BlockValidationResult::BLOCK_TIME_FUTURE, "time-too-new", "block timestamp too far in the future");
 
+    //Blackcoin ToDO: ENABLE!
     // Check timestamp
-    if (block.GetBlockTime() > FutureDrift(nAdjustedTime))
-        return state.Invalid(BlockValidationResult::BLOCK_TIME_FUTURE, "time-too-new", "block timestamp too far in the future");
+    //if (block.GetBlockTime() > FutureDrift(m_active_chainstate, nAdjustedTime))
+        //return state.Invalid(BlockValidationResult::BLOCK_TIME_FUTURE, "time-too-new", "block timestamp too far in the future");
 
     // Check maximum reorg depth
-    //Blackcoin ToDO: ENABLE!
     //if (m_active_chainstate.m_chain.Height() - nHeight >= consensusParams.nMaxReorganizationDepth)
         //return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "older-than-maxreorg-depth", strprintf("ContextualCheckBlockHeader(): forked chain older than max reorganization depth (height %d)", nHeight));
 
