@@ -15,6 +15,7 @@
 #include <key.h>
 #include <key_io.h>
 #include <miner.h>
+#include <node/blockstorage.h> // fReindex
 #include <outputtype.h>
 #include <policy/fees.h>
 #include <policy/policy.h>
@@ -2757,8 +2758,7 @@ std::shared_ptr<CWallet> CWallet::Create(interfaces::Chain* chain, const std::st
         walletInstance->WalletLogPrintf("m_address_book.size() = %u\n",  walletInstance->m_address_book.size());
     }
 
-    //Blackcoin ToDo: fix!
-    //if (!fReindex)
+    if (!fReindex)
         // Clean not reverted coinstake transactions
         walletInstance->CleanCoinStake();
 

@@ -353,11 +353,18 @@ void ParseRecipients(const UniValue& address_amounts, const UniValue& subtract_f
     }
 }
 
-/*
-// Blackcoin ToDo: fix
-static CTransactionRef SendMoneyToScript(interfaces::Chain::Lock& locked_chain, CWallet * const pwallet, const CScript scriptPubKey, CAmount nValue, bool fSubtractFeeFromAmount, const CCoinControl& coin_control, mapValue_t mapValue)
+// Blackcoin ToDo: check if it works
+UniValue SendMoneyToScript(CWallet& wallet, const CScript scriptPubKey, CAmount nValue, const CCoinControl &coin_control, mapValue_t map_value)
 {
-    CAmount curBalance = pwallet->GetBalance(0, coin_control.m_avoid_address_reuse).m_mine_trusted;
+    EnsureWalletIsUnlocked(wallet);
+
+    // This function is only used by sendtoaddress and sendmany.
+    // This should always try to sign, if we don't have private keys, don't try to do anything here.
+    if (wallet.IsWalletFlagSet(WALLET_FLAG_DISABLE_PRIVATE_KEYS)) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "Error: Private keys are disabled for this wallet");
+    }
+
+    CAmount curBalance = wallet.GetBalance(0, coin_control.m_avoid_address_reuse).m_mine_trusted;
 
     // Check amount
     if (nValue <= 0)
@@ -366,34 +373,25 @@ static CTransactionRef SendMoneyToScript(interfaces::Chain::Lock& locked_chain, 
     if (nValue > curBalance)
         throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds");
 
-   if (pwallet->m_wallet_unlock_staking_only)
+    if (wallet.m_wallet_unlock_staking_only)
         throw JSONRPCError(RPC_WALLET_ERROR, "Error: Wallet unlocked for staking only, unable to create transaction");
 
-    // Create and send the transaction
+    // Send
     CAmount nFeeRequired = 0;
-    std::string strError;
-    std::vector<CRecipient> vecSend;
     int nChangePosRet = -1;
-    CRecipient recipient = {scriptPubKey, nValue, fSubtractFeeFromAmount};
-    vecSend.push_back(recipient);
+    std::string strError;
+    std::vector<CRecipient> recipients;
+    CRecipient recipient = {scriptPubKey, nValue, false};
+    recipients.push_back(recipient);
+    bilingual_str error;
     CTransactionRef tx;
-    if (!pwallet->CreateTransaction(locked_chain, vecSend, tx, nFeeRequired, nChangePosRet, strError, coin_control)) {
-        if (!fSubtractFeeFromAmount && nValue + nFeeRequired > curBalance)
-            strError = strprintf("Error: This transaction requires a transaction fee of at least %s", FormatMoney(nFeeRequired));
-        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+    const bool fCreated = wallet.CreateTransaction(recipients, tx, nFeeRequired, nChangePosRet, error, coin_control, true);
+    if (!fCreated) {
+        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, error.original);
     }
-    pwallet->CommitTransaction(tx, std::move(mapValue), {});
-    return tx;
+    wallet.CommitTransaction(tx, std::move(map_value), {} /* orderForm */);
+    return tx->GetHash().GetHex();
 }
-
-static CTransactionRef SendMoney(interfaces::Chain::Lock& locked_chain, CWallet * const pwallet, const CTxDestination &address, CAmount nValue, bool fSubtractFeeFromAmount, const CCoinControl& coin_control, mapValue_t mapValue)
-{
-    // Parse Blackcoin address
-    CScript scriptPubKey = GetScriptForDestination(address);
-
-    return SendMoneyToScript(locked_chain, pwallet, scriptPubKey, nValue, fSubtractFeeFromAmount, coin_control, mapValue);
-}
-*/
 
 UniValue SendMoney(CWallet& wallet, const CCoinControl &coin_control, std::vector<CRecipient> &recipients, mapValue_t map_value, bool verbose)
 {
@@ -3510,11 +3508,10 @@ static RPCHelpMan reservebalance()
     };
 }
 
-/*
-// Blackcoin ToDo: fix
-UniValue burn(const JSONRPCRequest& request)
+// Blackcoin ToDo: check if it works
+static RPCHelpMan burn()
 {
-        RPCHelpMan{"burn",
+    return RPCHelpMan{"burn",
             "\nBurn specified amount of coins\n"
             "This will make specified amount of coins unspendable, making OP_RETURN transaction.\n" +
         HELP_REQUIRING_PASSPHRASE,
@@ -3528,12 +3525,17 @@ UniValue burn(const JSONRPCRequest& request)
             RPCExamples{
                 HelpExampleCli("burn", "0.1 \"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"")
             },
-        }.Check(request);
-
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
     CScript scriptPubKey;
-    std::shared_ptr<CWallet> const wallet = GetWalletForJSONRPCRequest(request);
-    CWallet* const pwallet = wallet.get();
-    auto locked_chain = pwallet->chain().lock();
+    std::shared_ptr<CWallet> const pwallet = GetWalletForJSONRPCRequest(request);
+    if (!pwallet) return NullUniValue;
+
+    // Make sure the results are valid at least up to the most recent block
+    // the user could have gotten from another RPC command prior to now
+    pwallet->BlockUntilSyncedToCurrentChain();
+
+    LOCK(pwallet->cs_wallet);
 
     if (request.params.size() > 1) {
         vector<unsigned char> data;
@@ -3549,15 +3551,17 @@ UniValue burn(const JSONRPCRequest& request)
 
     CAmount nAmount = AmountFromValue(request.params[0]);
 
-    EnsureWalletIsUnlocked(pwallet);
+    EnsureWalletIsUnlocked(*pwallet);
 
     CCoinControl coin_control;
     mapValue_t mapValue;
 
-    CTransactionRef tx = SendMoneyToScript(*locked_chain, pwallet, scriptPubKey, nAmount, false, coin_control, std::move(mapValue));
-    return tx->GetHash().GetHex();
+    return SendMoneyToScript(*pwallet, scriptPubKey, nAmount, coin_control, std::move(mapValue));
+},
+    };
 }
 
+/*
 UniValue burnwallet(const JSONRPCRequest& request)
 {
     std::shared_ptr<CWallet> const wallet = GetWalletForJSONRPCRequest(request);
@@ -4864,10 +4868,9 @@ static const CRPCCommand commands[] =
     { "wallet",             &walletpassphrase,               },
     { "wallet",             &walletpassphrasechange,         },
     { "wallet",             &walletprocesspsbt,              },
-    { "wallet",             &reservebalance,                 },
 
     { "wallet",             &reservebalance,                 },
-    //{ "wallet",             &burn,                           },
+    { "wallet",             &burn,                           },
     //{ "wallet",             &burnwallet,                     },
 };
 // clang-format on
