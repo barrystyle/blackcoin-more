@@ -141,11 +141,8 @@ test/.mypy_cache/
 libbitcoinconsensus.pc
 contrib/devtools/split-debug.sh
 
-libbitcoinconsensus.pc
-contrib/devtools/split-debug.sh
-
-# Output from running db6 installation
-db6/
+# Output from running db62 installation
+db62/
 
 # clang-check
 *.plist

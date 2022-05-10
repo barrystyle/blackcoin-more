@@ -211,10 +211,10 @@ public:
     WalletBatch(const WalletBatch&) = delete;
     WalletBatch& operator=(const WalletBatch&) = delete;
 
-    bool WriteName(const std::string& strAddress, const std::string &strName);
+    bool WriteName(const std::string& strAddress, const std::string& strName);
     bool EraseName(const std::string& strAddress);
 
-    bool WritePurpose(const std::string& strAddress, const std::string &purpose);
+    bool WritePurpose(const std::string& strAddress, const std::string& purpose);
     bool ErasePurpose(const std::string& strAddress);
 
     bool WriteTx(const CWalletTx& wtx);
