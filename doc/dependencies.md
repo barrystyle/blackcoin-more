@@ -9,7 +9,6 @@ These are the dependencies currently used by Blackcoin More. You can find instru
 | Boost | [1.71.0](https://www.boost.org/users/download/) | [1.64.0](https://github.com/bitcoin/bitcoin/pull/22320) | No |  |  |
 | Clang<sup>[ \* ](#note1)</sup> |  | [5.0+](https://releases.llvm.org/download.html) (C++17 support) |  |  |  |
 | Expat | [2.2.7](https://libexpat.github.io/) |  | No | Yes |  |
-| FreeType | [2.7.1](https://download.savannah.gnu.org/releases/freetype) |  | No |  |  |
 | fontconfig | [2.12.1](https://www.freedesktop.org/software/fontconfig/release/) |  | No | Yes |  |
 | FreeType | [2.7.1](https://download.savannah.gnu.org/releases/freetype) |  | No |  | [Yes](https://github.com/bitcoin/bitcoin/blob/master/depends/packages/qt.mk) (Android only) |
 | GCC |  | [7+](https://gcc.gnu.org/) (C++17 support) |  |  |  |
