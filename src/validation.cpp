@@ -3128,7 +3128,8 @@ bool BlockManager::AcceptBlockHeader(const CBlockHeader& block, BlockValidationS
             return true;
         }
 
-        if (!CheckBlockHeader(block, state, chainparams.GetConsensus(), chainstate)) {
+        // Blackcoin ToDo: Enable the checks for proof-of-work block headers
+        if (!CheckBlockHeader(block, state, chainparams.GetConsensus(), chainstate, false)) {
             LogPrint(BCLog::VALIDATION, "%s: Consensus::CheckBlockHeader: %s, %s\n", __func__, hash.ToString(), state.ToString());
             return false;
         }
