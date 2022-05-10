@@ -38,8 +38,10 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const interface
     uint256 hash = wtx.tx->GetHash();
     std::map<std::string, std::string> mapValue = wtx.value_map;
 
-    if (nNet > 0 || wtx.is_coinbase || wtx.is_coinstake)
+    // Blackcoin ToDo: Check if the values are shown in a correct way
+    if (wtx.is_coinstake)
     {
+        /*
         //
         // Credit
         //
@@ -50,7 +52,20 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const interface
                 if (wtx.tx->vout[j].scriptPubKey == wtx.tx->vout[1].scriptPubKey)
                     nReward += wtx.tx->vout[j].nValue;
         }
+        */
+        TransactionRecord sub(hash, nTime, TransactionRecord::Staked, "", -nDebit, wtx.tx->GetValueOut());
+        CTxDestination address;
+        const CTxOut& txout = wtx.tx->vout[1];
+        isminetype mine = wtx.txout_is_mine[1];
 
+        if (ExtractDestination(txout.scriptPubKey, address) && wtx.txout_address_is_mine[1])
+            sub.address = EncodeDestination(address);
+
+        sub.involvesWatchAddress = mine & ISMINE_WATCH_ONLY;
+        parts.append(sub);
+    }
+    else if (nNet > 0 || wtx.is_coinbase)
+    {
         for(unsigned int i = 0; i < wtx.tx->vout.size(); i++)
         {
             const CTxOut& txout = wtx.tx->vout[i];
@@ -73,18 +88,13 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const interface
                     sub.type = TransactionRecord::RecvFromOther;
                     sub.address = mapValue["from"];
                 }
-                if (wtx.is_coinbase || wtx.is_coinstake)
+                if (wtx.is_coinbase)
                 {
                     // Generated
                     sub.type = TransactionRecord::Generated;
                 }
 
                 parts.append(sub);
-				
-                if (wtx.is_coinstake) {
-                    sub.credit = nReward;
-                    break; // Single output for coinstake
-                }
             }
         }
     }
@@ -204,7 +214,7 @@ void TransactionRecord::updateStatus(const interfaces::WalletTxStatus& wtx, cons
         }
     }
     // For generated transactions, determine maturity
-    else if(type == TransactionRecord::Generated)
+    else if(type == TransactionRecord::Generated || type == TransactionRecord::Staked)
     {
         if (wtx.blocks_to_maturity > 0)
         {
