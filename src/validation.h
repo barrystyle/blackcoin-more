@@ -343,6 +343,9 @@ void InitScriptExecutionCache();
 
 /** Functions for validating blocks and updating the block tree */
 
+/** Sign proof-of-stake block */
+bool SignBlock(CBlock& block, const CWallet& keystore);
+
 /** Context-independent validity checks */
 bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensus::Params& consensusParams, CChainState& chainstate, bool fCheckPOW = true, bool fCheckMerkleRoot = true, bool fCheckSig = true);
 bool IsCanonicalBlockSignature(const std::shared_ptr<const CBlock> pblock, bool checkLowS);
