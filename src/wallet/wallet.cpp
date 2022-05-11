@@ -3464,7 +3464,7 @@ bool CWallet::SelectCoinsForStaking(CAmount& nTargetValue, std::set<std::pair<co
 
 // peercoin: create coin stake transaction
 typedef std::vector<unsigned char> valtype;
-bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmount& nFees, CMutableTransaction& tx, CKey& key)
+bool CWallet::CreateCoinStake(const CWallet* pwallet, unsigned int nBits, int64_t nSearchInterval, CMutableTransaction& tx, CAmount& nFees)
 {
     bool fAllowWatchOnly = IsWalletFlagSet(WALLET_FLAG_DISABLE_PRIVATE_KEYS);
     CBlockIndex* pindexPrev = chain().getTip();
@@ -3576,7 +3576,7 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
                         break;  // unable to find corresponding public key
                     }
 
-                    if (key.GetPubKey() != pubKey)
+                    if (pubKeyStake != pubKey)
                     {
                         LogPrint(BCLog::COINSTAKE, "CreateCoinStake : invalid key for kernel type=%d\n", (int)whichType);
                         break; // keys mismatch
@@ -3693,8 +3693,7 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmou
     int nIn = 0;
     for (const CWalletTx* pcoin : vwtxPrev)
     {
-        LegacyScriptPubKeyMan* spk_man = GetLegacyScriptPubKeyMan();
-        if (!SignSignature(*spk_man, *pcoin->tx, txNew, nIn++, SIGHASH_ALL))
+        if (!SignSignature(*pwallet->GetLegacyScriptPubKeyMan(), *pcoin->tx, txNew, nIn++, SIGHASH_ALL))
             return error("CreateCoinStake : failed to sign coinstake");
     }
 

@@ -154,6 +154,7 @@ public:
     bool isMultiwallet();
 
     uint64_t getStakeWeight();
+    uint64_t getLastCoinStakeSearchInterval();
 
     AddressTableModel* getAddressTableModel() const { return addressTableModel; }
 

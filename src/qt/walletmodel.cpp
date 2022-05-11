@@ -21,6 +21,7 @@
 #include <interfaces/handler.h>
 #include <interfaces/node.h>
 #include <key_io.h>
+#include <miner.h> // nLastCoinStakeSearchInterval
 #include <node/ui_interface.h>
 #include <psbt.h>
 #include <util/system.h> // for GetBoolArg
@@ -533,6 +534,11 @@ uint256 WalletModel::getLastBlockProcessed() const
 uint64_t WalletModel::getStakeWeight()
 {
     return nWeight;
+}
+
+uint64_t WalletModel::getLastCoinStakeSearchInterval()
+{
+    return nLastCoinStakeSearchInterval;
 }
 
 bool WalletModel::getWalletUnlockStakingOnly()

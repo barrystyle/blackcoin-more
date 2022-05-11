@@ -2754,6 +2754,26 @@ void CChainState::ReceivedBlockTransactions(const CBlock& block, CBlockIndex* pi
 }
 
 // Blackcoin
+// peercoin: sign block
+typedef std::vector<unsigned char> valtype;
+bool SignBlock(CBlock& block, const CWallet& keystore)
+{
+    std::vector<valtype> vSolutions;
+    const CTxOut& txout = block.IsProofOfStake() ? block.vtx[1]->vout[1] : block.vtx[0]->vout[0];
+
+    if (Solver(txout.scriptPubKey, vSolutions) != TxoutType::PUBKEY)
+        return false;
+
+    // Sign
+    const valtype& vchPubKey = vSolutions[0];
+    CKey key;
+    if (!keystore.GetLegacyScriptPubKeyMan()->GetKey(CKeyID(Hash160(vchPubKey)), key))
+        return false;
+    if (key.GetPubKey() != CPubKey(vchPubKey))
+        return false;
+    return key.Sign(block.GetHash(), block.vchBlockSig, 0);
+}
+
 static bool CheckBlockSignature(const CBlock& block)
 {
     if (block.IsProofOfWork())

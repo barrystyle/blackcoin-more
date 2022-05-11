@@ -642,8 +642,6 @@ public:
     std::atomic<bool> m_wallet_unlock_staking_only{false};
     CAmount m_reserve_balance{DEFAULT_RESERVE_BALANCE};
     unsigned int m_donation_percentage{DEFAULT_DONATION_PERCENTAGE};
-    int64_t m_last_coin_stake_search_time{0};
-    int64_t m_last_coin_stake_search_interval{0};
     std::atomic<bool> m_enabled_staking{false};
 
     size_t KeypoolCountExternalKeys() const EXCLUSIVE_LOCKS_REQUIRED(cs_wallet);
@@ -771,7 +769,7 @@ public:
     bool AbandonTransaction(const uint256& hashTx);
 
     /* Staking */
-    bool CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CAmount& nFees, CMutableTransaction& tx, CKey& key);
+    bool CreateCoinStake(const CWallet* pwallet, unsigned int nBits, int64_t nSearchInterval, CMutableTransaction& tx, CAmount& nFees);
     bool SelectCoinsForStaking(CAmount& nTargetValue, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet) const;
     void AvailableCoinsForStaking(std::vector<COutput>& vCoins) const;
     uint64_t GetStakeWeight() const;

@@ -489,7 +489,7 @@ static RPCHelpMan getstakinginfo()
     {
         LOCK(pwallet->cs_wallet);
         nWeight = pwallet->GetStakeWeight();
-        lastCoinStakeSearchInterval = pwallet->m_enabled_staking ? pwallet->m_last_coin_stake_search_interval : 0;
+        lastCoinStakeSearchInterval = pwallet->m_enabled_staking ? nLastCoinStakeSearchInterval : 0;
     }
 #endif
 
@@ -513,7 +513,7 @@ static RPCHelpMan getstakinginfo()
     obj.pushKV("pooledtx", (uint64_t)mempool.size());
 
     obj.pushKV("difficulty", GetDifficulty(GetLastBlockIndex(pindexBestHeader, true)));
-    obj.pushKV("search-interval", (int)lastCoinStakeSearchInterval);
+    obj.pushKV("search-interval", lastCoinStakeSearchInterval);
 
     obj.pushKV("weight", (uint64_t)nWeight);
     obj.pushKV("netstakeweight", (uint64_t)nNetworkWeight);
@@ -841,7 +841,7 @@ static RPCHelpMan getblocktemplate()
 
         // Create new block
         CScript scriptDummy = CScript() << OP_TRUE;
-        pblocktemplate = BlockAssembler(active_chainstate, mempool, Params()).CreateNewBlock(scriptDummy, 0, false);
+        pblocktemplate = BlockAssembler(active_chainstate, mempool, Params()).CreateNewBlock(scriptDummy);
         if (!pblocktemplate)
             throw JSONRPCError(RPC_OUT_OF_MEMORY, "Out of memory");
 
