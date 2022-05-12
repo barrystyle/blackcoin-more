@@ -20,14 +20,14 @@
 #include <pos.h>
 #include <pow.h>
 #include <primitives/transaction.h>
+#include <shutdown.h> // ShutdownRequested()
 #include <timedata.h>
 #include <util/moneystr.h>
 #include <util/system.h>
 #include <util/thread.h>
 #include <util/threadnames.h>
-#ifdef ENABLE_WALLET
 #include <wallet/wallet.h>
-#endif
+#include <warnings.h>
 
 #include <algorithm>
 #include <thread>
@@ -203,17 +203,17 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
 
                     // make sure coinstake would meet timestamp protocol
                     // as it would be the same as the block timestamp
-                    if (txCoinBase.nVersion < 2)
-                        pblock->nTime = txCoinBase.nTime = txCoinStake.nTime = nSearchTime;
+                    if (coinbaseTx.nVersion < 2)
+                        pblock->nTime = coinbaseTx.nTime = txCoinStake.nTime = nSearchTime;
                     else {
                         pblock->nTime = nSearchTime;
-                        txCoinBase.nTime = txCoinStake.nTime = 0;
+                        coinbaseTx.nTime = txCoinStake.nTime = 0;
                     }
 
                     // we have to make sure that we have no future timestamps in
                     // our transactions set
-                    for (vector<CTransaction>::iterator it = block.vtx.begin(); it != block.vtx.end();)
-                        if (it->nTime > block.nTime) { it = block.vtx.erase(it); } else { ++it; }
+                    for (vector<CTransaction>::iterator it = pblock->vtx.begin(); it != pblock->vtx.end();)
+                        if (it->nTime > pblock->nTime) { it = pblock->vtx.erase(it); } else { ++it; }
 
                     pblock->vtx.push_back(MakeTransactionRef(CTransaction(txCoinStake)));
                     *pfPoSCancel = false;
@@ -224,9 +224,6 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
         }
         if (*pfPoSCancel)
             return nullptr; // peercoin: there is no point to continue if we failed to create coinstake
-
-        // Set proof-of-stake flag
-        pblock->nFlags = CBlockIndex::BLOCK_PROOF_OF_STAKE;
     } 
 
     coinbaseTx.vin[0].scriptSig = CScript() << nHeight << OP_0;
