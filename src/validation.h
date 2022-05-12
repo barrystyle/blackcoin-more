@@ -31,6 +31,7 @@
 #include <util/check.h>
 #include <util/hasher.h>
 #include <util/translation.h>
+#include <wallet/wallet.h>
 
 #include <atomic>
 #include <map>
@@ -51,6 +52,7 @@ class CBlockIndex;
 class CBlockTreeDB;
 class CBlockUndo;
 class CChainParams;
+class CWallet;
 struct CCheckpointData;
 class CInv;
 class CConnman;
