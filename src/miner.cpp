@@ -752,5 +752,6 @@ void MinePoS(std::shared_ptr<CWallet> pwallet, ChainstateManager* chainman, CCha
 void InterruptStaking()
 {
     LogPrintf("ThreadStakeMiner interrupted\n");
-    threadStakeMiner.join();
+    if (threadStakeMiner.joinable())
+        threadStakeMiner.join();
 }

@@ -104,7 +104,6 @@ class COutput;
 class CScript;
 class CWalletTx;
 class ReserveDestination;
-namespace boost { class thread_group; }
 
 //! Default for -addresstype
 constexpr OutputType DEFAULT_ADDRESS_TYPE{OutputType::LEGACY};
