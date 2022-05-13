@@ -11,7 +11,6 @@
 
 #include <chain.h>
 #include <primitives/transaction.h>
-#include <pos.h>
 #include <txdb.h>
 #include <validation.h>
 #include <arith_uint256.h>

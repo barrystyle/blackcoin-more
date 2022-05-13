@@ -20,6 +20,7 @@
 #include <hash.h>
 #include <index/blockfilterindex.h>
 #include <index/txindex.h>
+#include <key.h>
 #include <logging.h>
 #include <logging/timer.h>
 #include <node/blockstorage.h>
@@ -51,6 +52,7 @@
 #include <util/translation.h>
 #include <validationinterface.h>
 #include <warnings.h>
+#include <wallet/wallet.h>
 
 #include <numeric>
 #include <optional>

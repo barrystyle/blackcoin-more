@@ -65,9 +65,12 @@ AC_PROG_CXX
 dnl By default, libtool for mingw refuses to link static libs into a dll for
 dnl fear of mixing pic/non-pic objects, and import/export complications. Since
 dnl we have those under control, re-enable that functionality.
+dnl Compiler with posix support is needed for cross compile some of c++ 14 features for mingw like threads and mutexes.
 case $host in
   *mingw*)
      lt_cv_deplibs_check_method="pass_all"
+     CC="$CC-posix"
+     CXX="$CXX-posix"
   ;;
 esac
 
@@ -673,7 +676,7 @@ case $host in
        AC_MSG_ERROR("windres not found")
      fi
 
-     CPPFLAGS="$CPPFLAGS -D_MT -DWIN32 -D_WINDOWS -D_WIN32_WINNT=0x0601 -D_WIN32_IE=0x0501 -DWIN32_LEAN_AND_MEAN"
+     CPPFLAGS="$CPPFLAGS -D_MT -DWIN32 -D_WINDOWS -DBOOST_THREAD_USE_LIB -D_WIN32_WINNT=0x0601 -D_WIN32_IE=0x0501 -DWIN32_LEAN_AND_MEAN"
 
      dnl libtool insists upon adding -nostdlib and a list of objects/libs to link against.
      dnl That breaks our ability to build dll's with static libgcc/libstdc++/libssp. Override
@@ -690,17 +693,6 @@ case $host in
      TARGET_OS=darwin
      if  test x$cross_compiling != xyes; then
        BUILD_OS=darwin
-       AC_CHECK_PROG([PORT],port, port)
-       if test x$PORT = xport; then
-         dnl add default macports paths
-         CPPFLAGS="$CPPFLAGS -isystem /opt/local/include"
-         LIBS="$LIBS -L/opt/local/lib"
-         if test -d /opt/local/include/db62; then
-           CPPFLAGS="$CPPFLAGS -I/opt/local/include/db62"
-           LIBS="$LIBS -L/opt/local/lib/db62"
-         fi
-       fi
-
        AC_PATH_PROGS([RSVG_CONVERT], [rsvg-convert rsvg],rsvg-convert)
        AC_CHECK_PROG([BREW],brew, brew)
        if test x$BREW = xbrew; then
@@ -710,11 +702,19 @@ case $host in
          dnl It's safe to add these paths even if the functionality is disabled by
          dnl the user (--without-wallet or --without-gui for example).
 
-         if test "x$use_bdb" != xno && $BREW list --versions berkeley-db62 >/dev/null && test "x$BDB_CFLAGS" = "x" && test "x$BDB_LIBS" = "x"; then
-           bdb_prefix=$($BREW --prefix berkeley-db62 2>/dev/null)
-           dnl This must precede the call to BITCOIN_FIND_BDB48 below.
+         openssl_prefix=`$BREW --prefix openssl@1.1 2>/dev/null`
+         bdb_prefix=$($BREW --prefix berkeley-db@4 2>/dev/null)
+         qt5_prefix=$($BREW --prefix qt5 2>/dev/null)
+         if test x$openssl_prefix != x; then
+           PKG_CONFIG_PATH="$openssl_prefix/lib/pkgconfig:$PKG_CONFIG_PATH"
+           export PKG_CONFIG_PATH
+         fi
+
+         if test "x$use_bdb" != xno && $BREW list --versions berkeley-db >/dev/null && test "x$BDB_CFLAGS" = "x" && test "x$BDB_LIBS" = "x"; then
+           bdb_prefix=$($BREW --prefix berkeley-db@4 2>/dev/null)
+           dnl This must precede the call to BITCOIN_FIND_BDB62 below.
            BDB_CFLAGS="-I$bdb_prefix/include"
-           BDB_LIBS="-L$bdb_prefix/lib -ldb_cxx-6.2"
+           BDB_LIBS="-L$bdb_prefix/lib -ldb_cxx-4.8"
          fi
 
          if test "x$use_sqlite" != xno && $BREW list --versions sqlite3 >/dev/null; then
@@ -723,10 +723,6 @@ case $host in
 
          if $BREW list --versions qt5 >/dev/null; then
            export PKG_CONFIG_PATH="$($BREW --prefix qt5 2>/dev/null)/lib/pkgconfig:$PKG_CONFIG_PATH"
-         fi
-         
-         if $BREW list --versions openssl >/dev/null; then
-           export PKG_CONFIG_PATH="$($BREW --prefix openssl 2>/dev/null)/lib/pkgconfig:$PKG_CONFIG_PATH"
          fi
        fi
      else
@@ -1439,16 +1435,13 @@ if test x$use_boost = xyes; then
   fi
   AX_BOOST_SYSTEM
   AX_BOOST_FILESYSTEM
-  AX_BOOST_PROGRAM_OPTIONS
   AX_BOOST_THREAD
-  AX_BOOST_RANDOM
-  AX_BOOST_CHRONO
 
   if test x$suppress_external_warnings != xno; then
     BOOST_CPPFLAGS=SUPPRESS_WARNINGS($BOOST_CPPFLAGS)
   fi
 
-  BOOST_LIBS="$BOOST_LDFLAGS $BOOST_SYSTEM_LIB $BOOST_FILESYSTEM_LIB $BOOST_PROGRAM_OPTIONS_LIB $BOOST_THREAD_LIB $BOOST_CHRONO_LIB $BOOST_RANDOM_LIB"
+  BOOST_LIBS="$BOOST_LDFLAGS $BOOST_SYSTEM_LIB $BOOST_FILESYSTEM_LIB $BOOST_THREAD_LIB"
 fi
 
 if test "x$use_external_signer" != xno; then
@@ -1507,30 +1500,15 @@ if test x$build_bitcoin_cli$build_bitcoind$bitcoin_enable_qt$use_tests$use_bench
   fi
 fi
 
+PKG_CHECK_MODULES([SSL], [libssl],, [AC_MSG_ERROR(openssl not found.)])
+PKG_CHECK_MODULES([CRYPTO], [libcrypto],,[AC_MSG_ERROR(libcrypto not found.)])
+
 dnl QR Code encoding library check
 
 if test "x$use_qr" != xno; then
   BITCOIN_QT_CHECK([PKG_CHECK_MODULES([QR], [libqrencode], [have_qrencode=yes], [have_qrencode=no])])
 fi
 
-dnl Crypto library check
-
-if test "x$use_crypto" != xno; then
-  PKG_CHECK_MODULES([CRYPTO], [libcrypto],,[AC_MSG_ERROR(libcrypto not found.)])
-fi
-
-AC_CHECK_HEADER([openssl/crypto.h],,AC_MSG_ERROR(libcrypto headers missing))
-AC_CHECK_LIB([crypto],      [main],CRYPTO_LIBS=-lcrypto, AC_MSG_ERROR(libcrypto missing))
-
-dnl SSL library check
-
-if test "x$use_crypto" != xno; then
-      PKG_CHECK_MODULES([SSL], [libssl],, [AC_MSG_ERROR(openssl not found.)])
-fi
-
-AC_CHECK_HEADER([openssl/ssl.h],, AC_MSG_ERROR(libssl headers missing),)
-AC_CHECK_LIB([ssl],         [main],SSL_LIBS=-lssl, AC_MSG_ERROR(libssl missing))
-  
 dnl ZMQ check
 
 if test "x$use_zmq" = xyes; then
@@ -1575,6 +1553,13 @@ else
     UNIVALUE_LIBS='univalue/libunivalue.la'
   fi
 fi
+
+save_CXXFLAGS="${CXXFLAGS}"
+CXXFLAGS="${CXXFLAGS} ${CRYPTO_CFLAGS} ${SSL_CFLAGS}"
+AC_CHECK_DECLS([EVP_MD_CTX_new],,,[AC_INCLUDES_DEFAULT
+#include <openssl/x509_vfy.h>
+])
+CXXFLAGS="${save_CXXFLAGS}"
 
 AM_CONDITIONAL([EMBEDDED_UNIVALUE],[test x$need_bundled_univalue = xyes])
 AC_SUBST(UNIVALUE_CFLAGS)
