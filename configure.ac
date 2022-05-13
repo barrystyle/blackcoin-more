@@ -703,7 +703,7 @@ case $host in
          dnl the user (--without-wallet or --without-gui for example).
 
          openssl_prefix=`$BREW --prefix openssl@1.1 2>/dev/null`
-         bdb_prefix=$($BREW --prefix berkeley-db 2>/dev/null)
+         bdb_prefix=$($BREW --prefix berkeley-db@4 2>/dev/null)
          qt5_prefix=$($BREW --prefix qt5 2>/dev/null)
          if test x$openssl_prefix != x; then
            PKG_CONFIG_PATH="$openssl_prefix/lib/pkgconfig:$PKG_CONFIG_PATH"
@@ -711,10 +711,10 @@ case $host in
          fi
 
          if test "x$use_bdb" != xno && $BREW list --versions berkeley-db >/dev/null && test "x$BDB_CFLAGS" = "x" && test "x$BDB_LIBS" = "x"; then
-           bdb_prefix=$($BREW --prefix berkeley-db 2>/dev/null)
+           bdb_prefix=$($BREW --prefix berkeley-db@4 2>/dev/null)
            dnl This must precede the call to BITCOIN_FIND_BDB62 below.
            BDB_CFLAGS="-I$bdb_prefix/include"
-           BDB_LIBS="-L$bdb_prefix/lib"
+           BDB_LIBS="-L$bdb_prefix/lib -ldb_cxx-4.8"
          fi
 
          if test "x$use_sqlite" != xno && $BREW list --versions sqlite3 >/dev/null; then
