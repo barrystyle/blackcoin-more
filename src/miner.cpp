@@ -15,6 +15,7 @@
 #include <consensus/validation.h>
 #include <deploymentstatus.h>
 #include <net_processing.h>
+#include <node/ui_interface.h>
 #include <policy/feerate.h>
 #include <policy/policy.h>
 #include <pos.h>
@@ -212,8 +213,8 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
 
                     // we have to make sure that we have no future timestamps in
                     // our transactions set
-                    for (vector<CTransaction>::iterator it = pblock->vtx.begin(); it != pblock->vtx.end();)
-                        if (it->nTime > pblock->nTime) { it = pblock->vtx.erase(it); } else { ++it; }
+                    //for (vector<CTransaction>::iterator it = pblock->vtx.begin(); it != pblock->vtx.end();)
+                    //    if (it->nTime > pblock->nTime) { it = pblock->vtx.erase(it); } else { ++it; }
 
                     pblock->vtx.push_back(MakeTransactionRef(CTransaction(txCoinStake)));
                     *pfPoSCancel = false;
@@ -703,7 +704,7 @@ void PoSMiner(std::shared_ptr<CWallet> pwallet, ChainstateManager* chainman, CCh
                     }
                 }
                 LogPrintf("PoSMiner: proof-of-stake block found %s\n", pblock->GetHash().ToString());
-                CheckStake(pblock, pwallet, chainman, chainstate)
+                CheckStake(pblock, pwallet, chainman, chainstate);
                 reservedest.KeepDestination();
                 // Blackcoin ToDo: !!!
                 // Rest for ~3 minutes after successful block to preserve close quick
