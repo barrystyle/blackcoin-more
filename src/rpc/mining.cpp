@@ -39,11 +39,9 @@
 #include <warnings.h>
 
 #include <timedata.h>
-#ifdef ENABLE_WALLET
 #include <wallet/wallet.h>
 #include <wallet/walletdb.h>
 #include <wallet/rpcwallet.h>
-#endif
 #include <memory>
 #include <stdint.h>
 
@@ -1138,6 +1136,89 @@ static RPCHelpMan submitheader()
     };
 }
 
+// Blackcoin ToDo: check if it returns correct value
+static RPCHelpMan estimatefee()
+{
+    return RPCHelpMan{"estimatefee",
+        "\nEstimates the approximate fee per kilobyte needed for a transaction\n"
+        "Uses virtual transaction size as defined\n"
+        "in BIP 141 (witness data is discounted).\n",
+        {},
+                RPCResult{
+                    RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::NUM, "feerate", /* optional */ true, "estimate fee rate in " + CURRENCY_UNIT + "/kvB (only present if no errors were encountered)"},
+                        {RPCResult::Type::ARR, "errors", /* optional */ true, "Errors encountered during processing (if there are any)",
+                            {
+                                {RPCResult::Type::STR, "", "error"},
+                            }},
+                    }},
+                RPCExamples{
+                    HelpExampleCli("estimatefee", "")
+                },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+    RPCTypeCheck(request.params, {UniValue::VNUM, UniValue::VSTR});
+
+    UniValue result(UniValue::VOBJ);
+    UniValue errors(UniValue::VARR);
+    CFeeRate feeRate = CFeeRate(MIN_TX_FEE_PER_KB);
+    if (feeRate != CFeeRate(0)) {
+        result.pushKV("feerate", ValueFromAmount(feeRate.GetFeePerK()));
+    } else {
+        errors.push_back("Insufficient data or no feerate found");
+        result.pushKV("errors", errors);
+    }
+    return result;
+},
+    };
+}
+
+static RPCHelpMan staking()
+{
+    return RPCHelpMan{"staking",
+            "Gets or sets the current staking configuration.\n"
+            "When called without an argument, returns the current status of staking.\n"
+            "When called with an argument, enables or disables staking.\n",
+            {
+                {"generate", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED_NAMED_ARG, "To enable or disable staking."},
+
+            },
+            RPCResult{
+                RPCResult::Type::OBJ, "", "",
+                {
+                    {RPCResult::Type::BOOL, "staking", "if staking is active or not. false: inactive, true: active"},
+                }
+            },
+            RPCExamples{
+                HelpExampleCli("staking", "\"[\\\"all\\\"]\" \"[\\\"http\\\"]\"")
+                + HelpExampleRpc("staking", "[\"all\"], [\"libevent\"]")
+            },
+            [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+
+
+    bool fGenerate = request.params[0].isNull() ? gArgs.GetBoolArg("-staking", DEFAULT_STAKE) : request.params[0].get_bool();
+    if (!request.params[0].isNull()) {
+        NodeContext& node = EnsureAnyNodeContext(request.context);
+        gArgs.ForceSetArg("-staking", fGenerate ? "1" : "0");
+
+        MintStake(gArgs.GetBoolArg("-staking", DEFAULT_STAKE), GetWallets()[0], node.chainman.get(), &node.chainman->ActiveChainstate(), node.connman.get(), node.mempool.get());
+
+        if (!fGenerate) {
+            InterruptStaking();
+            StopStaking();
+        }
+    }
+
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("generate", fGenerate);
+    return result;
+},
+    };
+
+}
+
 /*
 // Blackcoin ToDo: check and finalize?
 UniValue checkkernel(const JSONRPCRequest& request)
@@ -1273,44 +1354,6 @@ UniValue checkkernel(const JSONRPCRequest& request)
 }
 */
 
-// Blackcoin ToDo: check if it returns correct value
-static RPCHelpMan estimatefee()
-{
-    return RPCHelpMan{"estimatefee",
-        "\nEstimates the approximate fee per kilobyte needed for a transaction\n"
-        "Uses virtual transaction size as defined\n"
-        "in BIP 141 (witness data is discounted).\n",
-        {},
-                RPCResult{
-                    RPCResult::Type::OBJ, "", "",
-                    {
-                        {RPCResult::Type::NUM, "feerate", /* optional */ true, "estimate fee rate in " + CURRENCY_UNIT + "/kvB (only present if no errors were encountered)"},
-                        {RPCResult::Type::ARR, "errors", /* optional */ true, "Errors encountered during processing (if there are any)",
-                            {
-                                {RPCResult::Type::STR, "", "error"},
-                            }},
-                    }},
-                RPCExamples{
-                    HelpExampleCli("estimatefee", "")
-                },
-        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
-{
-    RPCTypeCheck(request.params, {UniValue::VNUM, UniValue::VSTR});
-
-    UniValue result(UniValue::VOBJ);
-    UniValue errors(UniValue::VARR);
-    CFeeRate feeRate = CFeeRate(MIN_TX_FEE_PER_KB);
-    if (feeRate != CFeeRate(0)) {
-        result.pushKV("feerate", ValueFromAmount(feeRate.GetFeePerK()));
-    } else {
-        errors.push_back("Insufficient data or no feerate found");
-        result.pushKV("errors", errors);
-    }
-    return result;
-},
-    };
-}
-
 void RegisterMiningRPCCommands(CRPCTable &t)
 {
 // clang-format off
@@ -1324,13 +1367,15 @@ static const CRPCCommand commands[] =
     { "mining",              &getblocktemplate,        },
     { "mining",              &submitblock,             },
     { "mining",              &submitheader,            },
-    //{ "mining",              &checkkernel,             },
 
     { "generating",          &generatetoaddress,       },
     { "generating",          &generatetodescriptor,    },
     { "generating",          &generateblock,           },
 
     { "util",                &estimatefee,             },
+
+    { "staking",             &staking,                 },
+    //{ "staking",             &checkkernel,             },
 
     { "hidden",              &generate,                },
 };
