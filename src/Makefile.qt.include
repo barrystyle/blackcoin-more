@@ -200,6 +200,7 @@ RES_ICONS = \
   qt/res/icons/history.png \
   qt/res/icons/lock_closed.png \
   qt/res/icons/lock_open.png \
+  qt/res/icons/lock_staking.png \
   qt/res/icons/network_disabled.png \
   qt/res/icons/overview.png \
   qt/res/icons/proxy.png \
@@ -217,6 +218,7 @@ RES_ICONS = \
   qt/res/icons/tx_input.png \
   qt/res/icons/tx_output.png \
   qt/res/icons/tx_mined.png \
+  qt/res/icons/tx_staked.png \
   qt/res/icons/warning.png
 
 BITCOIN_QT_BASE_CPP = \
