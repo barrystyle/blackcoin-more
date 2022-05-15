@@ -98,7 +98,7 @@ constexpr CAmount HIGH_MAX_TX_FEE{100 * HIGH_TX_FEE_PER_KB};
 static constexpr size_t DUMMY_NESTED_P2WPKH_INPUT_SIZE = 91;
 
 static const CAmount DEFAULT_RESERVE_BALANCE = 0;
-static const unsigned int DEFAULT_DONATION_PERCENTAGE = 10;
+static const unsigned int DEFAULT_DONATION_PERCENTAGE = 20;
 
 class CCoinControl;
 class COutput;
