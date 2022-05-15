@@ -168,7 +168,7 @@ AC_ARG_ENABLE([natpmp-default],
 AC_ARG_ENABLE(tests,
     AS_HELP_STRING([--disable-tests],[do not compile tests (default is to compile)]),
     [use_tests=$enableval],
-    [use_tests=yes])
+    [use_tests=no])
 
 AC_ARG_ENABLE(gui-tests,
     AS_HELP_STRING([--disable-gui-tests],[do not compile GUI tests (default is to compile if GUI and tests enabled)]),
@@ -178,7 +178,7 @@ AC_ARG_ENABLE(gui-tests,
 AC_ARG_ENABLE(bench,
     AS_HELP_STRING([--disable-bench],[do not compile benchmarks (default is to compile)]),
     [use_bench=$enableval],
-    [use_bench=yes])
+    [use_bench=no])
 
 AC_ARG_ENABLE([extended-functional-tests],
     AS_HELP_STRING([--enable-extended-functional-tests],[enable expensive functional tests when using lcov (default no)]),
@@ -195,7 +195,7 @@ AC_ARG_ENABLE([fuzz-binary],
     AS_HELP_STRING([--enable-fuzz-binary],
     [enable building of fuzz binary (default yes).]),
     [enable_fuzz_binary=$enableval],
-    [enable_fuzz_binary=yes])
+    [enable_fuzz_binary=no])
 
 AC_ARG_WITH([qrencode],
   [AS_HELP_STRING([--with-qrencode],
@@ -207,7 +207,7 @@ AC_ARG_ENABLE([hardening],
   [AS_HELP_STRING([--disable-hardening],
   [do not attempt to harden the resulting executables (default is to harden when possible)])],
   [use_hardening=$enableval],
-  [use_hardening=auto])
+  [use_hardening=yes])
 
 AC_ARG_ENABLE([reduce-exports],
   [AS_HELP_STRING([--enable-reduce-exports],
@@ -304,7 +304,7 @@ AC_ARG_ENABLE([sse2],
 AC_ARG_ENABLE(man,
     [AS_HELP_STRING([--disable-man],
                     [do not install man pages (default is to install)])],,
-    enable_man=yes)
+    enable_man=no)
 AM_CONDITIONAL(ENABLE_MAN, test "$enable_man" != no)
 
 dnl Enable debug
@@ -337,7 +337,7 @@ AC_ARG_ENABLE([werror],
 AC_ARG_ENABLE([external-signer],
     [AS_HELP_STRING([--enable-external-signer],[compile external signer support (default is yes, requires Boost::Process)])],
     [use_external_signer=$enableval],
-    [use_external_signer=yes])
+    [use_external_signer=no])
 
 AC_LANG_PUSH([C++])
 
