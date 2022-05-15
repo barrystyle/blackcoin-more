@@ -3361,9 +3361,9 @@ uint64_t CWallet::GetStakeWeight() const
     if (nBalance <= m_reserve_balance)
         return 0;
 
-    vector<const CWalletTx*> vwtxPrev;
+    std::vector<const CWalletTx*> vwtxPrev;
 
-    set<pair<const CWalletTx*,unsigned int> > setCoins;
+    std::set<pair<const CWalletTx*,unsigned int> > setCoins;
     CAmount nValueIn = 0;
 
     CAmount nTargetValue = nBalance - m_reserve_balance;
@@ -3425,7 +3425,7 @@ void CWallet::AvailableCoinsForStaking(std::vector<COutput>& vCoins) const
 // Select some coins without random shuffle or best subset approximation
 bool CWallet::SelectCoinsForStaking(CAmount& nTargetValue, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet) const
 {
-    vector<COutput> vCoins;
+    std::vector<COutput> vCoins;
     AvailableCoinsForStaking(vCoins);
 
     setCoinsRet.clear();
@@ -3489,9 +3489,9 @@ bool CWallet::CreateCoinStake(const CWallet* pwallet, unsigned int nBits, int64_
     if (nBalance <= m_reserve_balance)
         return false;
 
-    vector<const CWalletTx*> vwtxPrev;
+    std::vector<const CWalletTx*> vwtxPrev;
 
-    set<pair<const CWalletTx*,unsigned int> > setCoins;
+    std::set<pair<const CWalletTx*,unsigned int> > setCoins;
     CAmount nValueIn = 0;
 
     PKHash pkhash;
@@ -3512,7 +3512,6 @@ bool CWallet::CreateCoinStake(const CWallet* pwallet, unsigned int nBits, int64_
 
     if (gArgs.GetBoolArg("-stakecache", DEFAULT_STAKE_CACHE)) {
         for (const std::pair<const CWalletTx*, unsigned int> &pcoin : setCoins) {
-            boost::this_thread::interruption_point();
             COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);
             CacheKernel(stakeCache, prevoutStake, pindexPrev, chain().getCoinsTip()); // this will do a 2 disk loads per op
         }
@@ -3526,7 +3525,6 @@ bool CWallet::CreateCoinStake(const CWallet* pwallet, unsigned int nBits, int64_
         bool fKernelFound = false;
         for (unsigned int n=0; n<min(nSearchInterval,(int64_t)nMaxStakeSearchInterval) && !fKernelFound && pindexPrev == chain().getTip(); n++)
         {
-            boost::this_thread::interruption_point();
             // Search backward in time from the given txNew timestamp
             // Search nSearchInterval seconds back up to nMaxStakeSearchInterval
             COutPoint prevoutStake = COutPoint(pcoin.first->GetHash(), pcoin.second);

@@ -3538,7 +3538,7 @@ static RPCHelpMan burn()
     LOCK(pwallet->cs_wallet);
 
     if (request.params.size() > 1) {
-        vector<unsigned char> data;
+        std::vector<unsigned char> data;
         if (request.params[1].get_str().size() > 0){
             data = ParseHexV(request.params[1], "data");
         } else {
@@ -3575,7 +3575,7 @@ UniValue burnwallet(const JSONRPCRequest& request)
     CScript scriptPubKey;
 
     if (request.params.size() > 0) {
-        vector<unsigned char> data;
+        std::vector<unsigned char> data;
         if (request.params[0].get_str().size() > 0){
             data = ParseHexV(request.params[0], "data");
         } else {
