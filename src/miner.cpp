@@ -241,7 +241,7 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
 
     // Fill in header
     pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
-    pblock->nTime = max(pindexPrev->GetMedianTimePast()+1, GetMaxTransactionTime(pblock));
+    pblock->nTime = std::max(pindexPrev->GetMedianTimePast()+1, GetMaxTransactionTime(pblock));
     if (pblock->IsProofOfWork())
         UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
     pblock->nNonce         = 0;

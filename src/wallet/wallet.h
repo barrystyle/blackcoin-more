@@ -46,6 +46,7 @@
 using LoadWalletFn = std::function<void(std::unique_ptr<interfaces::Wallet> wallet)>;
 
 struct bilingual_str;
+struct CStakeCache;
 
 //! Explicitly unload and delete the wallet.
 //! Blocks the current thread after signaling the unload intent so that all

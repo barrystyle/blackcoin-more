@@ -2789,7 +2789,7 @@ static bool CheckBlockSignature(const CBlock& block)
     TxoutType whichType = Solver(txout.scriptPubKey, vSolutions);
 
     if (whichType == TxoutType::PUBKEY) {
-        vector<unsigned char>& vchPubKey = vSolutions[0];
+        std::vector<unsigned char>& vchPubKey = vSolutions[0];
         return CPubKey(vchPubKey).Verify(block.GetHash(), block.vchBlockSig);
     }
     else {
@@ -2798,7 +2798,7 @@ static bool CheckBlockSignature(const CBlock& block)
         const CScript& script = txout.scriptPubKey;
         CScript::const_iterator pc = script.begin();
         opcodetype opcode;
-        vector<unsigned char> vchPushValue;
+        std::vector<unsigned char> vchPushValue;
 
         uint256 hash = block.GetHash();
 
