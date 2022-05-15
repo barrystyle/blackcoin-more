@@ -165,6 +165,7 @@ BitcoinGUI::BitcoinGUI(interfaces::Node& node, const PlatformStyle *_platformSty
     labelProxyIcon = new GUIUtil::ClickableLabel(platformStyle);
     connectionsControl = new GUIUtil::ClickableLabel(platformStyle);
     labelBlocksIcon = new GUIUtil::ClickableLabel(platformStyle);
+    labelStakingIcon = new QLabel();
     if(enableWallet)
     {
         // frameBlocksLayout->addStretch();
@@ -172,24 +173,30 @@ BitcoinGUI::BitcoinGUI(interfaces::Node& node, const PlatformStyle *_platformSty
         frameBlocksLayout->addStretch();
         frameBlocksLayout->addWidget(labelWalletEncryptionIcon);
         frameBlocksLayout->addWidget(labelWalletHDStatusIcon);
+        frameBlocksLayout->addStretch();
+        frameBlocksLayout->addWidget(labelStakingIcon);
     }
     frameBlocksLayout->addWidget(labelProxyIcon);
-    frameBlocksLayout->addStretch();
-    frameBlocksLayout->addWidget(labelStakingIcon);
     frameBlocksLayout->addStretch();
     frameBlocksLayout->addWidget(connectionsControl);
     frameBlocksLayout->addStretch();
     frameBlocksLayout->addWidget(labelBlocksIcon);
     frameBlocksLayout->addStretch();
 	
+#ifdef ENABLE_WALLET
 	if (gArgs.GetBoolArg("-staking", DEFAULT_STAKE))
     {
         QTimer *timerStakingIcon = new QTimer(labelStakingIcon);
         connect(timerStakingIcon, SIGNAL(timeout()), this, SLOT(updateStakingIcon()));
-		QTimer::singleShot(1000, this, SLOT(updateStakingIcon()));
-        timerStakingIcon->start(30 * 1000);
-    }
+        timerStakingIcon->start(1000);
 
+        updateStakingIcon();
+    }
+    else
+    {
+        labelStakingIcon->setVisible(false);
+    }
+#endif // ENABLE_WALLET
 
     // Progress bar and label for blocks download
     progressBarLabel = new QLabel();
@@ -1457,12 +1464,9 @@ void BitcoinGUI::updateStakingIcon()
     WalletModel * const walletModel = walletView->getWalletModel();
 
     uint64_t nWeight = walletModel->getStakeWeight();
-
     if (walletModel->getLastCoinStakeSearchInterval() && nWeight)
     {
-        uint64_t nWeight = this->nWeight;
         uint64_t nNetworkWeight = 1.1429 * GetPoSKernelPS();
-
         const Consensus::Params& consensusParams = Params().GetConsensus();
         int64_t nTargetSpacing = consensusParams.nTargetSpacing;
         unsigned nEstimateTime = 1.0455 * nTargetSpacing * nNetworkWeight / nWeight;
