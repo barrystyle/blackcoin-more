@@ -183,10 +183,10 @@ public:
         };
 
         chainTxData = ChainTxData{
-            // Data from RPC: getchaintxstats 4096 2be3dbc08d6890259e352a9f96ba2f565929f3e55f40722af0ded94372b78d53
-            /* nTime    */ 1546686720,
-            /* nTxCount */ 6410197,
-            /* dTxRate  */ 2.0
+            // Data from RPC: getchaintxstats 40500 ef16e02c01548b33363f13674e18f794d7525212ed730f966cc420f0b61c5cee
+            /* nTime    */ 1652777360,
+            /* nTxCount */ 13086105,
+            /* dTxRate  */ 0.050
         };
 
         // A vector of p2sh addresses
@@ -291,10 +291,10 @@ public:
         };
 
         chainTxData = ChainTxData{
-            // Data from RPC: getchaintxstats 4096 567898e79184dc2f7dc3a661f794f28566e4b856d70180914f7371b1b3cc82d8
-            /* nTime    */ 1549558800,
-            /* nTxCount */ 179080,
-            /* dTxRate  */ 2.0
+            // Data from RPC: getchaintxstats 40500 ea12999341c1f02442ee9300a1da589a8d40f8f9a44bf4fbbb58b43c6f806c5d
+            /* nTime    */ 1652777744,
+            /* nTxCount */ 2201801,
+            /* dTxRate  */ 0.019
         };
         // A vector of p2sh addresses
         vDevFundAddress = { "mwAokTUtjKt2yjrpY3tFJH8BTC9VvcZg7F" };
