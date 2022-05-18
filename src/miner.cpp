@@ -182,14 +182,14 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     coinbaseTx.vin[0].prevout.SetNull();
     coinbaseTx.vout.resize(1);
 
-    // Proof-of-work block.
+    // Proof-of-work block
     if (!pwallet) {
         pblock->nBits = GetNextTargetRequired(pindexPrev, chainparams.GetConsensus(), false);
         coinbaseTx.vout[0].scriptPubKey = scriptPubKeyIn;
         coinbaseTx.vout[0].nValue = nFees + GetProofOfWorkSubsidy();
     }
 
-    // Proof-of-stake block.
+    // Proof-of-stake block
     static int64_t nLastCoinStakeSearchTime = GetAdjustedTime(); // startup timestamp
 
     if (pwallet) { // attempt to find a coinstake
@@ -242,13 +242,13 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     // Fill in header
     pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
     pblock->nTime = std::max(pindexPrev->GetMedianTimePast()+1, GetMaxTransactionTime(pblock));
-    if (pblock->IsProofOfWork())
+    if (!pblock->IsProofOfStake())
         UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
     pblock->nNonce         = 0;
     pblocktemplate->vTxSigOpsCost[0] = WITNESS_SCALE_FACTOR * GetLegacySigOpCount(*pblock->vtx[0]);
 
     BlockValidationState state;
-    if (pwallet && !TestBlockValidity(state, chainparams, m_chainstate, *pblock, pindexPrev, false, false, true)) {
+    if (!pblock->IsProofOfStake() && !TestBlockValidity(state, chainparams, m_chainstate, *pblock, pindexPrev, false, false, true)) {
         throw std::runtime_error(strprintf("%s: TestBlockValidity failed: %s", __func__, state.ToString()));
     }
     int64_t nTime2 = GetTimeMicros();
