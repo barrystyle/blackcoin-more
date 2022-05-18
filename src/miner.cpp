@@ -215,10 +215,8 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
 
                     // we have to make sure that we have no future timestamps in
                     // our transactions set
-                    /*
-                    for (vector<CTransaction>::iterator it = pblock->vtx.begin(); it != pblock->vtx.end();)
-                        if (it->nTime > pblock->nTime) { it = pblock->vtx.erase(it); } else { ++it; }
-                    */
+                    for (std::vector<CTransactionRef>::iterator it = pblock->vtx.begin(); it != pblock->vtx.end();)
+                        if (it->get()->nTime > pblock->nTime) { it = pblock->vtx.erase(it); } else { ++it; }
 
                     pblock->vtx.push_back(MakeTransactionRef(CTransaction(txCoinStake)));
                     *pfPoSCancel = false;
