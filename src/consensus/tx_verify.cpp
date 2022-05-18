@@ -167,7 +167,7 @@ int64_t GetTransactionSigOpCost(const CTransaction& tx, const CCoinsViewCache& i
     return nSigOps;
 }
 
-bool Consensus::CheckTxInputs(const CTransaction& tx, TxValidationState& state, const CCoinsViewCache& inputs, int nSpendHeight, CAmount& txfee, unsigned int nTimeTx)
+bool Consensus::CheckTxInputs(const CTransaction& tx, TxValidationState& state, const CCoinsViewCache& inputs, int nSpendHeight, CAmount& txfee, uint32_t nTimeTx)
 {
     // are the actual inputs available?
     if (!inputs.HaveInputs(tx)) {
@@ -223,7 +223,7 @@ bool Consensus::CheckTxInputs(const CTransaction& tx, TxValidationState& state, 
 }
 
 // Blackcoin: GetMinFee
-CAmount GetMinFee(const CTransaction& tx, unsigned int nTimeTx)
+CAmount GetMinFee(const CTransaction& tx, uint32_t nTimeTx)
 {
     size_t nBytes = ::GetSerializeSize(tx, PROTOCOL_VERSION);
     return GetMinFee(nBytes, nTimeTx);
