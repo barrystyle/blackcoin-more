@@ -3,9 +3,6 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-// Header spam protection by Qtum
-// Copyright (c) 2016-2019 The Qtum developers
-
 #ifndef BITCOIN_VALIDATION_H
 #define BITCOIN_VALIDATION_H
 

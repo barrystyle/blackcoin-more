@@ -3,6 +3,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+// PoSMiner by Peercoin
+// Copyright (c) 2020-2022 The Peercoin developers
+
 #include <miner.h>
 
 #include <amount.h>
