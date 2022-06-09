@@ -41,6 +41,13 @@ unsigned int GetNextTargetRequired(const CBlockIndex* pindexLast, const Consensu
     if (pindexPrevPrev->pprev == NULL)
         return nTargetLimit; // second block
 
+    // Mindiff for regtest
+    if (Params().NetworkIDString() == CBaseChainParams::REGTEST) {
+        arith_uint256 lowDiff;
+        lowDiff.SetCompact(0x207fffff);
+        return lowDiff.GetCompact();
+    }
+
     return CalculateNextTargetRequired(pindexPrev, pindexPrevPrev->GetBlockTime(), params, fProofOfStake);
 }
 

@@ -625,6 +625,8 @@ void PoSMiner(std::shared_ptr<CWallet> pwallet, ChainstateManager* chainman, CCh
             // Busy-wait for the network to come online so we don't waste time mining
             // on an obsolete chain. In regtest mode we expect to fly solo.
             while(connman == nullptr || connman->GetNodeCount(ConnectionDirection::Both) == 0 || chainstate->IsInitialBlockDownload()) {
+                if (Params().NetworkIDString() == CBaseChainParams::REGTEST)
+                    break;
                 if (ShutdownRequested())
                     return;
                 LogPrintf("Staker thread sleeps while IBD at %d\n", chainstate->m_chain.Tip()->nHeight);
