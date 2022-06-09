@@ -135,16 +135,61 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     if(!pblocktemplate.get())
         return nullptr;
     CBlock* const pblock = &pblocktemplate->block; // pointer for convenience
+    pblock->nTime = GetAdjustedTime();
+
+    LOCK2(cs_main, m_mempool.cs);
+    CBlockIndex* pindexPrev = m_chainstate.m_chain.Tip();
+    assert(pindexPrev != nullptr);
+    nHeight = pindexPrev->nHeight + 1;
+
+    // Create coinbase transaction.
+    CMutableTransaction coinbaseTx;
+    coinbaseTx.vin.resize(1);
+    coinbaseTx.vin[0].prevout.SetNull();
+    coinbaseTx.vout.resize(1);
+
+    // Proof-of-work block
+    if (!pwallet) {
+        pblock->nBits = GetNextTargetRequired(pindexPrev, chainparams.GetConsensus(), false);
+        coinbaseTx.vout[0].scriptPubKey = scriptPubKeyIn;
+        coinbaseTx.vout[0].nValue = nFees + GetProofOfWorkSubsidy();
+    }
 
     // Add dummy coinbase tx as first transaction
     pblock->vtx.emplace_back();
     pblocktemplate->vTxFees.push_back(-1); // updated at end
     pblocktemplate->vTxSigOpsCost.push_back(-1); // updated at end
 
-    LOCK2(cs_main, m_mempool.cs);
-    CBlockIndex* pindexPrev = m_chainstate.m_chain.Tip();
-    assert(pindexPrev != nullptr);
-    nHeight = pindexPrev->nHeight + 1;
+    // peercoin: if coinstake available add coinstake tx
+    static int64_t nLastCoinStakeSearchTime = GetAdjustedTime();  // only initialized at startup
+
+    if (pwallet) { // attempt to find a coinstake
+        *pfPoSCancel = true;
+        pblock->nBits = GetNextTargetRequired(pindexPrev, chainparams.GetConsensus(), true);
+        CMutableTransaction txCoinStake;
+        int64_t nSearchTime = txCoinStake.nTime; // search to current time
+        nSearchTime &= ~Params().GetConsensus().nStakeTimestampMask;
+        if (nSearchTime > nLastCoinStakeSearchTime) {
+            if (pwallet->CreateCoinStake(pblock->nBits, nSearchTime - nLastCoinStakeSearchTime /* 1 */ , txCoinStake, nFees)) {
+                if (nSearchTime >= pindexPrev->GetMedianTimePast()+1) {
+                    // Make the coinbase tx empty in case of proof of stake
+                    coinbaseTx.vout[0].SetEmpty();
+                    if (coinbaseTx.nVersion < 2) {
+                        pblock->nTime = coinbaseTx.nTime = txCoinStake.nTime = nSearchTime;
+                    } else {
+                        pblock->nTime = nSearchTime;
+                        coinbaseTx.nTime = txCoinStake.nTime = 0;
+                    }
+                    pblock->vtx.push_back(MakeTransactionRef(CTransaction(txCoinStake)));
+                    *pfPoSCancel = false;
+                }
+            }
+            nLastCoinStakeSearchInterval = nSearchTime - nLastCoinStakeSearchTime;
+            nLastCoinStakeSearchTime = nSearchTime;
+        }
+        if (*pfPoSCancel)
+            return nullptr; // peercoin: there is no point to continue if we failed to create coinstake
+    }
 
     pblock->nVersion = g_versionbitscache.ComputeBlockVersion(pindexPrev, chainparams.GetConsensus());
     // -regtest only: allow overriding block.nVersion with
@@ -152,7 +197,6 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     if (chainparams.MineBlocksOnDemand())
         pblock->nVersion = gArgs.GetArg("-blockversion", pblock->nVersion);
 
-    pblock->nTime = GetAdjustedTime();
     const int64_t nMedianTimePast = pindexPrev->GetMedianTimePast();
 
     nLockTimeCutoff = (STANDARD_LOCKTIME_VERIFY_FLAGS & LOCKTIME_MEDIAN_TIME_PAST)
@@ -179,57 +223,10 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     m_last_block_num_txs = nBlockTx;
     m_last_block_weight = nBlockWeight;
 
-    // Create coinbase transaction.
-    CMutableTransaction coinbaseTx;
-    coinbaseTx.vin.resize(1);
-    coinbaseTx.vin[0].prevout.SetNull();
-    coinbaseTx.vout.resize(1);
-
-    // Proof-of-work block
-    if (!pwallet) {
-        pblock->nBits = GetNextTargetRequired(pindexPrev, chainparams.GetConsensus(), false);
-        coinbaseTx.vout[0].scriptPubKey = scriptPubKeyIn;
-        coinbaseTx.vout[0].nValue = nFees + GetProofOfWorkSubsidy();
-    }
-
-    // Proof-of-stake block
-    static int64_t nLastCoinStakeSearchTime = GetAdjustedTime(); // startup timestamp
-
-    if (pwallet) { // attempt to find a coinstake
-        *pfPoSCancel = true;
-        pblock->nBits = GetNextTargetRequired(pindexPrev, chainparams.GetConsensus(), true);
-        CMutableTransaction txCoinStake;
-        int64_t nSearchTime = txCoinStake.nTime; // search to current time
-        nSearchTime &= ~Params().GetConsensus().nStakeTimestampMask;
-        if (nSearchTime > nLastCoinStakeSearchTime) {
-            if (pwallet->CreateCoinStake(pwallet, pblock->nBits, nSearchTime - nLastCoinStakeSearchTime /* 1 */ , txCoinStake, nFees)) {
-                if (nSearchTime >= pindexPrev->GetMedianTimePast()+1) {  
-                    // Make the coinbase tx empty in case of proof of stake
-                    coinbaseTx.vout[0].SetEmpty();
-
-                    // make sure coinstake would meet timestamp protocol
-                    // as it would be the same as the block timestamp
-                    if (coinbaseTx.nVersion < 2)
-                        pblock->nTime = coinbaseTx.nTime = txCoinStake.nTime = nSearchTime;
-                    else {
-                        pblock->nTime = nSearchTime;
-                        coinbaseTx.nTime = txCoinStake.nTime = 0;
-                    }
-
-                    pblock->vtx.push_back(MakeTransactionRef(CTransaction(txCoinStake)));
-                    *pfPoSCancel = false;
-                }
-            }
-            nLastCoinStakeSearchInterval = nSearchTime - nLastCoinStakeSearchTime;
-            nLastCoinStakeSearchTime = nSearchTime;
-        }
-        if (*pfPoSCancel)
-            return nullptr; // peercoin: there is no point to continue if we failed to create coinstake
-    } 
-
     coinbaseTx.vin[0].scriptSig = CScript() << nHeight << OP_0;
     pblock->vtx[0] = MakeTransactionRef(std::move(coinbaseTx));
-    pblocktemplate->vchCoinbaseCommitment = GenerateCoinbaseCommitment(*pblock, pindexPrev, chainparams.GetConsensus());
+    if (fIncludeWitness)
+        pblocktemplate->vchCoinbaseCommitment = GenerateCoinbaseCommitment(*pblock, pindexPrev, chainparams.GetConsensus());
     pblocktemplate->vTxFees[0] = -nFees;
 
     // Blackcoin: Avoid log spamming
@@ -523,14 +520,11 @@ void IncrementExtraNonce(CBlock* pblock, const CBlockIndex* pindexPrev, unsigned
 }
 
 // Blackcoin
-static bool CheckStake(const CBlock* pblock, std::shared_ptr<CWallet> pwallet, ChainstateManager* chainman, CChainState* chainstate)
+static bool ProcessBlockFound(const CBlock* pblock, ChainstateManager* chainman, CChainState* chainstate)
 {
-    uint256 hashBlock = pblock->GetHash();
+    LogPrintf("%s\n", pblock->ToString().c_str());
 
-    if (!pblock->IsProofOfStake())
-        return error("CheckStake() : %s is not a proof-of-stake block", hashBlock.GetHex());
-
-    // verify hash target and signature of coinstake tx
+    // Found a solution
     {
         LOCK(cs_main);
         BlockValidationState state;
@@ -538,30 +532,8 @@ static bool CheckStake(const CBlock* pblock, std::shared_ptr<CWallet> pwallet, C
             return error("CheckStake() : proof-of-stake checking failed");
     }
 
-    //// debug print
-    LogPrint(BCLog::COINSTAKE, "CheckStake() : new proof-of-stake block found  \n  hash: %s \n", hashBlock.GetHex());
-    LogPrint(BCLog::COINSTAKE, "%s\n", pblock->ToString());
-    LogPrint(BCLog::COINSTAKE, "generated %s\n", FormatMoney(pblock->vtx[0]->vout[0].nValue));
-    LogPrint(BCLog::COINSTAKE, "out %s\n", FormatMoney(pblock->vtx[1]->GetValueOut()));
-
-    // Found a solution
-    {
-        LOCK(cs_main);
-        if (pblock->hashPrevBlock != chainstate->m_chain.Tip()->GetBlockHash())
-            return error("CheckStake() : generated block is stale");
-    }
-    {
-        LOCK(pwallet->cs_wallet);
-        for (const CTxIn& vin : pblock->vtx[1]->vin) {
-            if (pwallet->IsSpent(vin.prevout.hash, vin.prevout.n)) {
-                return error("CheckStake() : generated block became invalid due to stake UTXO being spent");
-            }
-        }
-    }
-
     // Process this block the same as if we had received it from another node
-    std::shared_ptr<const CBlock> shared_pblock =
-                std::make_shared<const CBlock>(*pblock);
+    std::shared_ptr<const CBlock> shared_pblock = std::make_shared<const CBlock>(*pblock);
     if (!chainman->ProcessNewBlock(Params(), shared_pblock, true, NULL))
         return error("CheckStake() : ProcessNewBlock, block not accepted");
 
@@ -659,19 +631,6 @@ void PoSMiner(std::shared_ptr<CWallet> pwallet, ChainstateManager* chainman, CCh
             //
             // Create new block
             //
-            /*
-            CAmount nBalance = pwallet->GetBalance().m_mine_trusted;
-            CAmount nTargetValue = nBalance - pwallet->m_reserve_balance;
-            CAmount nValueIn = 0;
-            std::set<std::pair<const CWalletTx*,unsigned int> > setCoins;
-            {
-                LOCK(pwallet->cs_wallet);
-                pwallet->SelectCoinsForStaking(nTargetValue, setCoins, nValueIn);
-            }
-            if (setCoins.size() > 0)
-            {
-            }
-            */
             CBlockIndex* pindexPrev = chainstate->m_chain.Tip();
             bool fPoSCancel = false;
             CScript scriptPubKey = GetScriptForDestination(dest);
@@ -714,8 +673,7 @@ void PoSMiner(std::shared_ptr<CWallet> pwallet, ChainstateManager* chainman, CCh
                     }
                 }
                 LogPrintf("PoSMiner: proof-of-stake block found %s\n", pblock->GetHash().ToString());
-                CheckStake(pblock, pwallet, chainman, chainstate);
-                reservedest.KeepDestination();
+                ProcessBlockFound(pblock, chainman, chainstate);
                 // Blackcoin ToDo: !!!
                 // Rest for ~3 minutes after successful block to preserve close quick
                 if (!connman->interruptNet.sleep_for(std::chrono::seconds(60 + GetRand(4))))
