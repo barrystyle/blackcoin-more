@@ -3599,22 +3599,56 @@ bool CWallet::CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CMuta
     CAmount nReward = nFees + GetProofOfStakeSubsidy();
     if (nReward < 0)
         return false;
-    nCredit += nReward;
+
+    bool isDevFundEnabled = m_donation_percentage > 0 ? true : false;
+    CAmount nDevCredit = 0;
+    CAmount nMinerCredit = 0;
+
+    if (isDevFundEnabled)
+    {
+        nDevCredit = (GetProofOfStakeSubsidy() * m_donation_percentage) / 100;
+        nMinerCredit = nReward - nDevCredit;
+        nCredit += nMinerCredit;
+    }
+    else
+    {
+        nCredit += nReward;
+    }
 
     // Split stake
     if (nCredit >= GetStakeSplitThreshold())
         txNew.vout.push_back(CTxOut(0, txNew.vout[1].scriptPubKey));
 
-    while(true)
+    if (isDevFundEnabled)
+        txNew.vout.push_back(CTxOut(0, Params().GetDevRewardScript()));
+
+    while (true)
     {
         // Set output amount
-        if (txNew.vout.size() == 3)
+        if (isDevFundEnabled)
         {
-            txNew.vout[1].nValue = (nCredit / 2 / CENT) * CENT;
-            txNew.vout[2].nValue = nCredit - txNew.vout[1].nValue;
+            if (txNew.vout.size() == 4)
+            {
+                txNew.vout[1].nValue = (nCredit / 2 / CENT) * CENT;
+                txNew.vout[2].nValue = nCredit - txNew.vout[1].nValue;
+                txNew.vout[3].nValue = nDevCredit;
+            }
+            else
+            {
+                txNew.vout[1].nValue = nCredit;
+                txNew.vout[2].nValue = nDevCredit;
+            }
         }
         else
-            txNew.vout[1].nValue = nCredit;
+        {
+            if (txNew.vout.size() == 3)
+            {
+                txNew.vout[1].nValue = (nCredit / 2 / CENT) * CENT;
+                txNew.vout[2].nValue = nCredit - txNew.vout[1].nValue;
+            }
+            else
+                txNew.vout[1].nValue = nCredit;
+        }
 
         // Sign
         int nIn = 0;
