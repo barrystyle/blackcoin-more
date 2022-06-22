@@ -769,7 +769,7 @@ public:
     bool AbandonTransaction(const uint256& hashTx);
 
     /* Staking */
-    bool CreateCoinStake(unsigned int nBits, int64_t nSearchInterval, CMutableTransaction& tx, CAmount& nFees);
+    bool CreateCoinStake(CBlockIndex* pindexPrev, unsigned int nBits, int64_t nSearchInterval, CAmount& nFees, CMutableTransaction& txNew, CKey& key);
     bool SelectCoinsForStaking(CAmount& nTargetValue, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet) const;
     void AvailableCoinsForStaking(std::vector<COutput>& vCoins) const;
     uint64_t GetStakeWeight() const;

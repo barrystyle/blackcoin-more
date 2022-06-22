@@ -2755,25 +2755,60 @@ void CChainState::ReceivedBlockTransactions(const CBlock& block, CBlockIndex* pi
     }
 }
 
-// Blackcoin
-// peercoin: sign block
-typedef std::vector<unsigned char> valtype;
-bool SignBlock(CBlock& block, const CWallet& keystore)
+bool SignBlock(CBlockIndex* pindex, CBlock* pblock, CWallet& wallet, CAmount& nFees)
 {
-    std::vector<valtype> vSolutions;
-    const CTxOut& txout = block.IsProofOfStake() ? block.vtx[1]->vout[1] : block.vtx[0]->vout[0];
-
-    if (Solver(txout.scriptPubKey, vSolutions) != TxoutType::PUBKEY)
+    // if we are trying to sign
+    // something except proof-of-stake block template
+    if (!pblock->vtx[0]->vout[0].IsEmpty()){
+        LogPrintf("something except proof-of-stake block\n");
         return false;
+    }
 
-    // Sign
-    const valtype& vchPubKey = vSolutions[0];
+    // if we are trying to sign
+    // a complete proof-of-stake block
+    if (pblock->IsProofOfStake()){
+        LogPrintf("trying to sign a complete proof-of-stake block\n");
+        return true;
+    }
+
+    static int64_t nLastCoinStakeSearchTime = GetAdjustedTime(); // startup timestamp
+
     CKey key;
-    if (!keystore.GetLegacyScriptPubKeyMan()->GetKey(CKeyID(Hash160(vchPubKey)), key))
-        return false;
-    if (key.GetPubKey() != CPubKey(vchPubKey))
-        return false;
-    return key.Sign(block.GetHash(), block.vchBlockSig, 0);
+    CMutableTransaction txCoinBase(*pblock->vtx[0]);
+    CMutableTransaction txCoinStake;
+    txCoinStake.nTime = GetAdjustedTime();
+    txCoinStake.nTime &= ~Params().GetConsensus().nStakeTimestampMask;
+
+    int64_t nSearchTime = txCoinStake.nTime; // search to current time
+
+    if (nSearchTime > nLastCoinStakeSearchTime)
+    {
+        if (wallet.CreateCoinStake(pindex, pblock->nBits, 1, nFees, txCoinStake, key))
+        {
+            if (txCoinStake.nTime >= pindex->GetPastTimeLimit()+1)
+            {
+                // make sure coinstake would meet timestamp protocol
+                // as it would be the same as the block timestamp
+                if (txCoinBase.nVersion < 2)
+                    txCoinBase.nTime = pblock->nTime = txCoinStake.nTime;
+                else {
+                    pblock->nTime = txCoinStake.nTime;
+                    txCoinBase.nTime = txCoinStake.nTime = 0;
+                }
+
+                pblock->vtx[0] = MakeTransactionRef(std::move(txCoinBase));
+                pblock->vtx.insert(pblock->vtx.begin() + 1, MakeTransactionRef(txCoinStake));
+                pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
+
+                // append a signature to our block
+                return key.Sign(pblock->GetHash(), pblock->vchBlockSig);
+            }
+        }
+        nLastCoinStakeSearchInterval = nSearchTime - nLastCoinStakeSearchTime;
+        nLastCoinStakeSearchTime = nSearchTime;
+    }
+
+    return false;
 }
 
 static bool CheckBlockSignature(const CBlock& block)

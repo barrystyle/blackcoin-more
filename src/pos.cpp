@@ -100,6 +100,7 @@ bool CheckStakeKernelHash(const CBlockIndex* pindexPrev, unsigned int nBits, uin
     ss << blockFromTime << prevout.hash << prevout.n << nTimeTx;
 
     uint256 hashProofOfStake = ss.GetHash();
+    LogPrintf("%s\n", hashProofOfStake.ToString());
 
     if (fPrintProofOfStake)
     {
@@ -134,10 +135,7 @@ bool CheckProofOfStake(CBlockIndex* pindexPrev, const CTransaction& tx, unsigned
     const CTxIn& txin = tx.vin[0];
 
     // First try finding the previous transaction in database
-    CMutableTransaction txPrev;
-    
     Coin coinPrev;
-
     if (!view.GetCoin(txin.prevout, coinPrev)) {
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "stake-prevout-not-exist", strprintf("CheckProofOfStake() : Stake prevout does not exist %s", txin.prevout.hash.ToString()));
     }

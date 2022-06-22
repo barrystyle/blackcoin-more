@@ -304,6 +304,14 @@ public:
         }
     }
 
+    int64_t GetPastTimeLimit() const
+    {
+        if (Params().GetConsensus().IsProtocolV2(GetBlockTime()))
+            return GetBlockTime();
+        else
+            return GetMedianTimePast();
+    }
+
     bool IsProofOfWork() const
     {
         return !(nFlags & BLOCK_PROOF_OF_STAKE);
