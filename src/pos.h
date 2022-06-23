@@ -24,6 +24,19 @@
 
 using namespace std;
 
+/** Keep track of best proofhash seen */
+struct proofEntry {
+
+    uint32_t timeSeen;
+    uint256 proofHash;
+
+    proofEntry()
+    {
+         timeSeen = 0;
+         proofHash = ArithToUint256(arith_uint256()-1);
+    }
+};
+
 /** Compute the hash modifier for proof-of-stake */
 uint256 ComputeStakeModifier(const CBlockIndex* pindexPrev, const uint256& kernel);
 
