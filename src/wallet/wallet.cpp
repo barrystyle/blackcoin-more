@@ -3525,34 +3525,33 @@ bool CWallet::CreateCoinStake(CBlockIndex* pindexPrev, unsigned int nBits, int64
                 LogPrintf("CreateCoinStake : parsed kernel type=%d\n", (int)whichType);
                 if (whichType != TxoutType::PUBKEY && whichType != TxoutType::PUBKEYHASH)
                 {
-                    LogPrintf("CreateCoinStake : no support for kernel type=%d\n", (int)whichType);
-                    break;  // only support pay to public key and pay to address
+                    LogPrintf("CreateCoinStake : no support for kernel type=%s\n", GetTxnOutputType(whichType).c_str());
+                    return false;
                 }
                 if (whichType == TxoutType::PUBKEYHASH) // pay to address type
                 {
                     // convert to pay to public key type
                     if (!GetLegacyScriptPubKeyMan()->GetKey(CKeyID(uint160(vSolutions[0])), key))
                     {
-                        LogPrintf("CreateCoinStake : failed to get key for kernel type=%d\n", (int)whichType);
+                        LogPrintf("CreateCoinStake : failed to get key for kernel type=%s\n", GetTxnOutputType(whichType).c_str());
                         break;  // unable to find corresponding public key
                     }
                     scriptPubKeyOut << ToByteVector(key.GetPubKey()) << OP_CHECKSIG;
                 }
-                if (whichType == TxoutType::PUBKEY)
+                else if (whichType == TxoutType::PUBKEY)
                 {
                     valtype& vchPubKey = vSolutions[0];
                     CPubKey pubKey(vchPubKey);
                     uint160 hash160(Hash160(vchPubKey));
-                    PKHash pkhash = PKHash(hash160);
-                    CPubKey pubKeyStake;
-                    if (!HasPrivateKey(pkhash, false) || !GetPubKey(pkhash, pubKeyStake))
+                    CKeyID pubKeyHash(hash160);
+                    if (!GetLegacyScriptPubKeyMan()->GetKey(pubKeyHash, key))
                     {
-                        LogPrint(BCLog::COINSTAKE, "CreateCoinStake : failed to get key for kernel type=%d\n", (int)whichType);
+                        LogPrintf("CreateCoinStake : failed to get key for kernel type=%s\n", GetTxnOutputType(whichType).c_str());
                         break;  // unable to find corresponding public key
                     }
-                    if (pubKeyStake != pubKey)
+                    if (key.GetPubKey() != pubKey)
                     {
-                        LogPrint(BCLog::COINSTAKE, "CreateCoinStake : invalid key for kernel type=%d\n", (int)whichType);
+                        LogPrintf("CreateCoinStake : invalid key for kernel type=%s\n", GetTxnOutputType(whichType).c_str());
                         break; // keys mismatch
                     }
                     scriptPubKeyOut = scriptPubKeyKernel;
